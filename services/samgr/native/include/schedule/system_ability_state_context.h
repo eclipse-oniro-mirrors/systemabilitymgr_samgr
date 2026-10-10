@@ -91,6 +91,7 @@ struct SystemAbilityContext {
     SystemAbilityState state = SystemAbilityState::NOT_LOADED;
     PendingEvent pendingEvent = PendingEvent::NO_EVENT;
     bool isAutoRestart = false;
+    bool independentUnload = false;
 };
 } // namespace OHOS
 
