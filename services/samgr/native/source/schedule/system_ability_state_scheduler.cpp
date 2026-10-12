@@ -131,6 +131,7 @@ void SystemAbilityStateScheduler::InitStateContext(const std::list<SaProfile>& s
         auto abilityContext = std::make_shared<SystemAbilityContext>();
         abilityContext->systemAbilityId = saProfile.saId;
         abilityContext->isAutoRestart = saProfile.autoRestart;
+        abilityContext->independentUnload = saProfile.independentUnload;
         int32_t delayUnloadTime = LimitDelayUnloadTime(saProfile.stopOnDemand.delayTime);
         abilityContext->delayUnloadTime = delayUnloadTime;
         abilityContext->ownProcessContext = processContextMap_[saProfile.process];
@@ -1287,7 +1288,13 @@ void SystemAbilityStateScheduler::OnAbilityNotLoadedLocked(int32_t systemAbility
     if (abilityContext->ownProcessContext->state == SystemProcessState::STOPPING) {
         PostTryKillProcessTask(abilityContext->ownProcessContext);
     } else if (abilityContext->ownProcessContext->state == SystemProcessState::STARTED) {
-        PostTryUnloadAllAbilityTask(abilityContext->ownProcessContext);
+        if (CanKillSystemProcessLocked(abilityContext->ownProcessContext)) {
+            HILOGI("Scheduler proc:%{public}s all SA not loaded, kill process",
+                Str16ToStr8(abilityContext->ownProcessContext->processName).c_str());
+            KillSystemProcessLocked(abilityContext->ownProcessContext);
+        } else {
+            PostTryUnloadAllAbilityTask(abilityContext->ownProcessContext);
+        }
     }
 }
 
@@ -1333,6 +1340,13 @@ void SystemAbilityStateScheduler::OnAbilityUnloadableLocked(int32_t systemAbilit
     if (abilityContext->ownProcessContext && IsProcessIdledLocked(abilityContext->ownProcessContext)) {
         HILOGI("Scheduler proc:%{public}s idled", Str16ToStr8(abilityContext->ownProcessContext->processName).c_str());
         NotifyProcessIdled(abilityContext->ownProcessContext);
+    }
+    if (abilityContext->independentUnload) {
+        HILOGI("Scheduler SA:%{public}d independent unload start", systemAbilityId);
+        if (abilityContext->state == SystemAbilityState::UNLOADABLE) {
+            DoUnloadSystemAbilityLocked(abilityContext);
+        }
+        return;
     }
     PostTryUnloadAllAbilityTask(abilityContext->ownProcessContext);
 }

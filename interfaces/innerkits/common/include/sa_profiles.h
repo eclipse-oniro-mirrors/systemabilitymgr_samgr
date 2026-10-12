@@ -134,6 +134,7 @@ struct SaProfile {
     int32_t recycleStrategy = IMMEDIATELY;
     std::list<std::string> extension;
     bool cacheCommonEvent = false;
+    bool independentUnload = false;
 };
 
 struct CommonSaProfile {

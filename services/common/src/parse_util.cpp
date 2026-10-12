@@ -69,6 +69,7 @@ constexpr const char* SA_TAG_LONGTIMEUNUSED_UNLOAD = "longtimeunused-unload";
 #ifdef SUPPORT_MULTI_INSTANCE
 constexpr const char* SA_TAG_MULTI_INSTANCE = "multi-instance";
 #endif
+constexpr const char* SA_TAG_INDEPENDENT_UNLOAD = "independent-unload";
 constexpr int32_t MAX_JSON_OBJECT_SIZE = 50 * 1024;
 constexpr int32_t MAX_JSON_STRING_LENGTH = 128;
 constexpr int32_t FIRST_SYS_ABILITY_ID = 0x00000000;
@@ -430,6 +431,7 @@ bool ParseUtil::ParseSystemAbilityGetSaExtInfo(SaProfile& saProfile, nlohmann::j
     GetBoolFromJson(systemAbilityJson, SA_TAG_AUTO_RESTART, saProfile.autoRestart);
     GetBoolFromJson(systemAbilityJson, SA_TAG_DISTRIBUTED, saProfile.distributed);
     GetBoolFromJson(systemAbilityJson, SA_TAG_CACHE_COMMON_EVENT, saProfile.cacheCommonEvent);
+    GetBoolFromJson(systemAbilityJson, SA_TAG_INDEPENDENT_UNLOAD, saProfile.independentUnload);
     GetIntArrayFromJson(systemAbilityJson, SA_TAG_DEPEND, saProfile.dependSa);
     GetInt32FromJson(systemAbilityJson, SA_TAG_DEPEND_TIMEOUT, saProfile.dependTimeout);
     if (saProfile.dependTimeout == 0) {

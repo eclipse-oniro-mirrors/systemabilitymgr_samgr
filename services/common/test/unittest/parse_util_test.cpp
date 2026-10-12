@@ -1489,5 +1489,67 @@ HWTEST_F(ParseUtilTest, ParseMultiInstance005, TestSize.Level3)
     DTEST_LOG << " ParseMultiInstance005 END" << std::endl;
 }
 #endif
+
+/**
+ * @tc.name: ParseIndependentUnload001
+ * @tc.desc: parse json file with independent-unload=true, verify field is parsed correctly
+ * @tc.type: FUNC
+ */
+HWTEST_F(ParseUtilTest, ParseIndependentUnload001, TestSize.Level3)
+{
+    DTEST_LOG << " ParseIndependentUnload001 BEGIN" << std::endl;
+    parser_->saProfiles_.clear();
+    bool ret = parser_->ParseSaProfiles(TEST_RESOURCE_PATH + "sa_profile_independent_unload.json");
+    EXPECT_EQ(ret, true);
+    EXPECT_EQ(parser_->saProfiles_.empty(), false);
+
+    SaProfile saProfile;
+    ret = parser_->GetProfile(TEST_PROFILE_SAID, saProfile);
+    EXPECT_EQ(ret, true);
+    EXPECT_EQ(saProfile.saId, TEST_PROFILE_SAID);
+    EXPECT_EQ(saProfile.independentUnload, true);
+    DTEST_LOG << " ParseIndependentUnload001 END" << std::endl;
+}
+
+/**
+ * @tc.name: ParseIndependentUnload002
+ * @tc.desc: parse json file with independent-unload=false, verify field defaults to false
+ * @tc.type: FUNC
+ */
+HWTEST_F(ParseUtilTest, ParseIndependentUnload002, TestSize.Level3)
+{
+    DTEST_LOG << " ParseIndependentUnload002 BEGIN" << std::endl;
+    parser_->saProfiles_.clear();
+    bool ret = parser_->ParseSaProfiles(TEST_RESOURCE_PATH + "sa_profile_independent_unload_false.json");
+    EXPECT_EQ(ret, true);
+    EXPECT_EQ(parser_->saProfiles_.empty(), false);
+
+    SaProfile saProfile;
+    ret = parser_->GetProfile(TEST_PROFILE_SAID, saProfile);
+    EXPECT_EQ(ret, true);
+    EXPECT_EQ(saProfile.saId, TEST_PROFILE_SAID);
+    EXPECT_EQ(saProfile.independentUnload, false);
+    DTEST_LOG << " ParseIndependentUnload002 END" << std::endl;
+}
+
+/**
+ * @tc.name: ParseIndependentUnload003
+ * @tc.desc: parse json file without independent-unload tag, verify field defaults to false
+ * @tc.type: FUNC
+ */
+HWTEST_F(ParseUtilTest, ParseIndependentUnload003, TestSize.Level3)
+{
+    DTEST_LOG << " ParseIndependentUnload003 BEGIN" << std::endl;
+    parser_->saProfiles_.clear();
+    bool ret = parser_->ParseSaProfiles(TEST_RESOURCE_PATH + "multi_sa_profile.json");
+    EXPECT_EQ(ret, true);
+    EXPECT_EQ(parser_->saProfiles_.empty(), false);
+
+    SaProfile saProfile;
+    ret = parser_->GetProfile(TEST_PROFILE_SAID, saProfile);
+    EXPECT_EQ(ret, true);
+    EXPECT_EQ(saProfile.independentUnload, false);
+    DTEST_LOG << " ParseIndependentUnload003 END" << std::endl;
+}
 } // namespace SAMGR
 } // namespace OHOS
