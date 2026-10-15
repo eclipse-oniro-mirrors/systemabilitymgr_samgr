@@ -131,6 +131,7 @@ void SystemAbilityStateScheduler::InitStateContext(const std::list<SaProfile>& s
         auto abilityContext = std::make_shared<SystemAbilityContext>();
         abilityContext->systemAbilityId = saProfile.saId;
         abilityContext->isAutoRestart = saProfile.autoRestart;
+        abilityContext->independentUnload = saProfile.independentUnload;
         int32_t delayUnloadTime = LimitDelayUnloadTime(saProfile.stopOnDemand.delayTime);
         abilityContext->delayUnloadTime = delayUnloadTime;
         abilityContext->ownProcessContext = processContextMap_[saProfile.process];
@@ -744,19 +745,23 @@ bool SystemAbilityStateScheduler::CanUnloadAllSystemAbilityLocked(
 {
     uint32_t notLoadAbilityCount = processContext->abilityStateCountMap[SystemAbilityState::NOT_LOADED];
     uint32_t unloadableAbilityCount = processContext->abilityStateCountMap[SystemAbilityState::UNLOADABLE];
-    if (unloadableAbilityCount == 0) {
+    // Before introducing independently unloadable SAs, an SA can only go into the UNLOADING state if
+    // UnloadAllSystemAbilityLocked is called, otherwise unloadingAbilityCount would be zero.
+    uint32_t unloadingAbilityCount = processContext->abilityStateCountMap[SystemAbilityState::UNLOADING];
+    if (unloadableAbilityCount == 0 && unloadingAbilityCount == 0) {
         return false;
     }
-    if (notLoadAbilityCount + unloadableAbilityCount == processContext->saList.size()) {
+    if (notLoadAbilityCount + unloadableAbilityCount + unloadingAbilityCount == processContext->saList.size()) {
         if (isNeedCheckRecycleStrategy) {
             return CheckSaIsImmediatelyRecycle(processContext);
         } else {
             return true;
         }
     }
-    HILOGI("Scheduler proc:%{public}s SA num:%{public}zu,notloaded:%{public}d,unloadable:%{public}d",
+    HILOGI(
+        "Scheduler proc:%{public}s SA num:%{public}zu,notloaded:%{public}d,unloadable:%{public}d,unloading:%{public}d",
         Str16ToStr8(processContext->processName).c_str(), processContext->saList.size(), notLoadAbilityCount,
-        unloadableAbilityCount);
+        unloadableAbilityCount, unloadingAbilityCount);
     return false;
 }
 
@@ -1333,6 +1338,10 @@ void SystemAbilityStateScheduler::OnAbilityUnloadableLocked(int32_t systemAbilit
     if (abilityContext->ownProcessContext && IsProcessIdledLocked(abilityContext->ownProcessContext)) {
         HILOGI("Scheduler proc:%{public}s idled", Str16ToStr8(abilityContext->ownProcessContext->processName).c_str());
         NotifyProcessIdled(abilityContext->ownProcessContext);
+    }
+    if (abilityContext->independentUnload) {
+        HILOGI("Scheduler SA:%{public}d independent unload start", systemAbilityId);
+        DoUnloadSystemAbilityLocked(abilityContext);
     }
     PostTryUnloadAllAbilityTask(abilityContext->ownProcessContext);
 }
