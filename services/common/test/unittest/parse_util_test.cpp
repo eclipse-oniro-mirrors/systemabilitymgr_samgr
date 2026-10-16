@@ -1489,5 +1489,61 @@ HWTEST_F(ParseUtilTest, ParseMultiInstance005, TestSize.Level3)
     DTEST_LOG << " ParseMultiInstance005 END" << std::endl;
 }
 #endif
+
+/**
+ * @tc.name: ParseIndependentUnload001
+ * @tc.desc: parse independent-unload tag set to true
+ * @tc.type: FUNC
+ */
+HWTEST_F(ParseUtilTest, ParseIndependentUnload001, TestSize.Level3)
+{
+    DTEST_LOG << " ParseIndependentUnload001 BEGIN" << std::endl;
+    nlohmann::json systemAbilityJson;
+    SaProfile saProfile;
+    systemAbilityJson["name"] = DISTRIBUTED_DEVICE_PROFILE_SA_ID;
+    systemAbilityJson["libpath"] = "/system/lib/test.so";
+    systemAbilityJson["independent-unload"] = true;
+    bool ret = parser_->ParseSystemAbility(saProfile, systemAbilityJson);
+    EXPECT_EQ(ret, true);
+    EXPECT_EQ(saProfile.independentUnload, true);
+    DTEST_LOG << " ParseIndependentUnload001 END" << std::endl;
+}
+
+/**
+ * @tc.name: ParseIndependentUnload002
+ * @tc.desc: parse independent-unload tag set to false
+ * @tc.type: FUNC
+ */
+HWTEST_F(ParseUtilTest, ParseIndependentUnload002, TestSize.Level3)
+{
+    DTEST_LOG << " ParseIndependentUnload002 BEGIN" << std::endl;
+    nlohmann::json systemAbilityJson;
+    SaProfile saProfile;
+    systemAbilityJson["name"] = DISTRIBUTED_DEVICE_PROFILE_SA_ID;
+    systemAbilityJson["libpath"] = "/system/lib/test.so";
+    systemAbilityJson["independent-unload"] = false;
+    bool ret = parser_->ParseSystemAbility(saProfile, systemAbilityJson);
+    EXPECT_EQ(ret, true);
+    EXPECT_EQ(saProfile.independentUnload, false);
+    DTEST_LOG << " ParseIndependentUnload002 END" << std::endl;
+}
+
+/**
+ * @tc.name: ParseIndependentUnload003
+ * @tc.desc: parse without independent-unload tag, default should be false
+ * @tc.type: FUNC
+ */
+HWTEST_F(ParseUtilTest, ParseIndependentUnload003, TestSize.Level3)
+{
+    DTEST_LOG << " ParseIndependentUnload003 BEGIN" << std::endl;
+    nlohmann::json systemAbilityJson;
+    SaProfile saProfile;
+    systemAbilityJson["name"] = DISTRIBUTED_DEVICE_PROFILE_SA_ID;
+    systemAbilityJson["libpath"] = "/system/lib/test.so";
+    bool ret = parser_->ParseSystemAbility(saProfile, systemAbilityJson);
+    EXPECT_EQ(ret, true);
+    EXPECT_EQ(saProfile.independentUnload, false);
+    DTEST_LOG << " ParseIndependentUnload003 END" << std::endl;
+}
 } // namespace SAMGR
 } // namespace OHOS

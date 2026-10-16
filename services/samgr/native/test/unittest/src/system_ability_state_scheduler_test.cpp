@@ -2406,4 +2406,165 @@ HWTEST_F(SystemAbilityStateSchedulerTest, GetRunningSystemProcess004, TestSize.L
     EXPECT_EQ(result.processName, Str16ToStr8(testProcess));
     DTEST_LOG<<"GetRunningSystemProcess004 END"<<std::endl;
 }
+
+/**
+ * @tc.name: CanUnloadAllSystemAbilityLockedIndep001
+ * @tc.desc: test CanUnloadAllSystemAbilityLocked with unloading>0, sum==size, isNeedCheckRecycleStrategy=true
+ * @tc.type: FUNC
+ */
+HWTEST_F(SystemAbilityStateSchedulerTest, CanUnloadAllSystemAbilityLockedIndep001, TestSize.Level3)
+{
+    auto scheduler = std::make_shared<SystemAbilityStateScheduler>(std::weak_ptr<BaseSystemAbilityManager> {});
+    std::list<SaProfile> saProfiles;
+    scheduler->Init(saProfiles);
+    auto processContext = std::make_shared<SystemProcessContext>();
+    processContext->saList.push_back(SAID);
+    processContext->abilityStateCountMap.clear();
+    processContext->abilityStateCountMap[SystemAbilityState::UNLOADING] = 1;
+    bool ret = scheduler->CanUnloadAllSystemAbilityLocked(processContext, true);
+    EXPECT_FALSE(ret);
+}
+
+/**
+ * @tc.name: CanUnloadAllSystemAbilityLockedIndep002
+ * @tc.desc: test CanUnloadAllSystemAbilityLocked with unloading+unloadable+notloaded==saList size,
+ * isNeedCheckRecycleStrategy=false
+ * @tc.type: FUNC
+ */
+HWTEST_F(SystemAbilityStateSchedulerTest, CanUnloadAllSystemAbilityLockedIndep002, TestSize.Level3)
+{
+    auto scheduler = std::make_shared<SystemAbilityStateScheduler>(std::weak_ptr<BaseSystemAbilityManager> {});
+    std::list<SaProfile> saProfiles;
+    scheduler->Init(saProfiles);
+    auto processContext = std::make_shared<SystemProcessContext>();
+    processContext->saList.push_back(SAID);
+    processContext->abilityStateCountMap.clear();
+    processContext->abilityStateCountMap[SystemAbilityState::UNLOADING] = 1;
+    bool ret = scheduler->CanUnloadAllSystemAbilityLocked(processContext, false);
+    EXPECT_TRUE(ret);
+}
+
+/**
+ * @tc.name: CanUnloadAllSystemAbilityLockedIndep003
+ * @tc.desc: test CanUnloadAllSystemAbilityLocked with unloading>0 but sum!=saList size
+ * @tc.type: FUNC
+ */
+HWTEST_F(SystemAbilityStateSchedulerTest, CanUnloadAllSystemAbilityLockedIndep003, TestSize.Level3)
+{
+    auto scheduler = std::make_shared<SystemAbilityStateScheduler>(std::weak_ptr<BaseSystemAbilityManager> {});
+    std::list<SaProfile> saProfiles;
+    scheduler->Init(saProfiles);
+    auto processContext = std::make_shared<SystemProcessContext>();
+    processContext->saList.push_back(SAID);
+    processContext->saList.push_back(TEST_SYSTEM_ABILITY1);
+    processContext->abilityStateCountMap.clear();
+    processContext->abilityStateCountMap[SystemAbilityState::UNLOADING] = 1;
+    bool ret = scheduler->CanUnloadAllSystemAbilityLocked(processContext, false);
+    EXPECT_FALSE(ret);
+}
+
+/**
+ * @tc.name: CanUnloadAllSystemAbilityLockedIndep004
+ * @tc.desc: test CanUnloadAllSystemAbilityLocked with both unloadable==0 and unloading==0
+ * @tc.type: FUNC
+ */
+HWTEST_F(SystemAbilityStateSchedulerTest, CanUnloadAllSystemAbilityLockedIndep004, TestSize.Level3)
+{
+    auto scheduler = std::make_shared<SystemAbilityStateScheduler>(std::weak_ptr<BaseSystemAbilityManager> {});
+    std::list<SaProfile> saProfiles;
+    scheduler->Init(saProfiles);
+    auto processContext = std::make_shared<SystemProcessContext>();
+    processContext->saList.push_back(SAID);
+    processContext->abilityStateCountMap.clear();
+    processContext->abilityStateCountMap[SystemAbilityState::LOADED] = 1;
+    bool ret = scheduler->CanUnloadAllSystemAbilityLocked(processContext, false);
+    EXPECT_FALSE(ret);
+}
+
+/**
+ * @tc.name: OnAbilityUnloadableLockedIndep001
+ * @tc.desc: test OnAbilityUnloadableLocked with independentUnload=true
+ * @tc.type: FUNC
+ */
+HWTEST_F(SystemAbilityStateSchedulerTest, OnAbilityUnloadableLockedIndep001, TestSize.Level3)
+{
+    auto scheduler = std::make_shared<SystemAbilityStateScheduler>(std::weak_ptr<BaseSystemAbilityManager> {});
+    std::list<SaProfile> saProfiles;
+    scheduler->Init(saProfiles);
+    auto abilityContext = std::make_shared<SystemAbilityContext>();
+    auto processContext = std::make_shared<SystemProcessContext>();
+    scheduler->abilityContextMap_.clear();
+    abilityContext->ownProcessContext = processContext;
+    abilityContext->independentUnload = true;
+    scheduler->abilityContextMap_[SAID] = abilityContext;
+    scheduler->OnAbilityUnloadableLocked(SAID);
+    EXPECT_EQ(scheduler->abilityContextMap_.count(SAID), 1);
+    scheduler->CleanFfrt();
+}
+
+/**
+ * @tc.name: OnAbilityUnloadableLockedIndep002
+ * @tc.desc: test OnAbilityUnloadableLocked with independentUnload=false (default)
+ * @tc.type: FUNC
+ */
+HWTEST_F(SystemAbilityStateSchedulerTest, OnAbilityUnloadableLockedIndep002, TestSize.Level3)
+{
+    auto scheduler = std::make_shared<SystemAbilityStateScheduler>(std::weak_ptr<BaseSystemAbilityManager> {});
+    std::list<SaProfile> saProfiles;
+    scheduler->Init(saProfiles);
+    auto abilityContext = std::make_shared<SystemAbilityContext>();
+    auto processContext = std::make_shared<SystemProcessContext>();
+    scheduler->abilityContextMap_.clear();
+    abilityContext->ownProcessContext = processContext;
+    abilityContext->independentUnload = false;
+    scheduler->abilityContextMap_[SAID] = abilityContext;
+    scheduler->OnAbilityUnloadableLocked(SAID);
+    EXPECT_EQ(scheduler->abilityContextMap_.count(SAID), 1);
+    scheduler->CleanFfrt();
+}
+
+/**
+ * @tc.name: InitStateContextIndependentUnload001
+ * @tc.desc: test InitStateContext copies independentUnload from SaProfile to abilityContext
+ * @tc.type: FUNC
+ */
+HWTEST_F(SystemAbilityStateSchedulerTest, InitStateContextIndependentUnload001, TestSize.Level3)
+{
+    auto scheduler = std::make_shared<SystemAbilityStateScheduler>(std::weak_ptr<BaseSystemAbilityManager> {});
+    std::list<SaProfile> saProfiles;
+    SaProfile saProfile;
+    saProfile.saId = SAID;
+    saProfile.process = u"samgr_test_indep";
+    saProfile.independentUnload = true;
+    saProfiles.push_back(saProfile);
+    scheduler->Init(saProfiles);
+    std::shared_ptr<SystemAbilityContext> abilityContext;
+    bool ret = scheduler->GetSystemAbilityContext(SAID, abilityContext);
+    EXPECT_TRUE(ret);
+    EXPECT_NE(abilityContext, nullptr);
+    EXPECT_TRUE(abilityContext->independentUnload);
+    scheduler->CleanFfrt();
+}
+
+/**
+ * @tc.name: InitStateContextIndependentUnload002
+ * @tc.desc: test InitStateContext with independentUnload=false (default)
+ * @tc.type: FUNC
+ */
+HWTEST_F(SystemAbilityStateSchedulerTest, InitStateContextIndependentUnload002, TestSize.Level3)
+{
+    auto scheduler = std::make_shared<SystemAbilityStateScheduler>(std::weak_ptr<BaseSystemAbilityManager> {});
+    std::list<SaProfile> saProfiles;
+    SaProfile saProfile;
+    saProfile.saId = SAID;
+    saProfile.process = u"samgr_test_indep_default";
+    saProfiles.push_back(saProfile);
+    scheduler->Init(saProfiles);
+    std::shared_ptr<SystemAbilityContext> abilityContext;
+    bool ret = scheduler->GetSystemAbilityContext(SAID, abilityContext);
+    EXPECT_TRUE(ret);
+    EXPECT_NE(abilityContext, nullptr);
+    EXPECT_FALSE(abilityContext->independentUnload);
+    scheduler->CleanFfrt();
+}
 }
