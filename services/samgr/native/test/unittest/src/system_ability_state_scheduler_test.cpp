@@ -2567,4 +2567,31 @@ HWTEST_F(SystemAbilityStateSchedulerTest, InitStateContextIndependentUnload002, 
     EXPECT_FALSE(abilityContext->independentUnload);
     scheduler->CleanFfrt();
 }
+
+/**
+ * @tc.name: AutoRestartFalseNoRestart001
+ * @tc.desc: test SA with autoRestart=false does not enter restart list
+ * @tc.type: FUNC
+ */
+HWTEST_F(SystemAbilityStateSchedulerTest, AutoRestartFalseNoRestart001, TestSize.Level3)
+{
+    std::shared_ptr<SystemAbilityStateScheduler> scheduler =
+        std::make_shared<SystemAbilityStateScheduler>(
+            std::weak_ptr<BaseSystemAbilityManager>{});
+    std::list<SaProfile> saProfiles;
+    scheduler->Init(saProfiles);
+    std::shared_ptr<SystemAbilityContext> abilityContext = std::make_shared<SystemAbilityContext>();
+    std::shared_ptr<SystemProcessContext> processContext = std::make_shared<SystemProcessContext>();
+    abilityContext->isAutoRestart = false;
+    abilityContext->state = SystemAbilityState::LOADED;
+    abilityContext->ownProcessContext = processContext;
+    abilityContext->systemAbilityId = SAID;
+    scheduler->abilityContextMap_.clear();
+    scheduler->abilityContextMap_[SAID] = abilityContext;
+    processContext->saList.push_back(SAID);
+
+    std::list<std::shared_ptr<SystemAbilityContext>> abnormallyDiedAbilityList;
+    scheduler->GetAbnormallyDiedAbilityLocked(processContext, abnormallyDiedAbilityList);
+    EXPECT_TRUE(abnormallyDiedAbilityList.empty());
+}
 }

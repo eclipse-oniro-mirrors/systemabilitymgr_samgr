@@ -231,6 +231,7 @@ protected:
     virtual int32_t StartDynamicSystemProcess(const std::u16string& name, int32_t systemAbilityId,
         const OnDemandEvent& event);
     bool IsInitBootFinished();
+    void WaitForProcessStopped(const std::u16string& name, int32_t systemAbilityId);
 
     void RefreshListenerState(int32_t systemAbilityId);
     int32_t FindSystemAbilityNotify(int32_t systemAbilityId, int32_t code);
