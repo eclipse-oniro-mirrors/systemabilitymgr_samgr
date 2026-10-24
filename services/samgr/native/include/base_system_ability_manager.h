@@ -170,6 +170,7 @@ public:
 #ifdef SUPPORT_MULTI_INSTANCE
     std::set<int32_t> GetMultiInstanceSaIds();
     std::vector<std::u16string> GetSystemProcessNames() const;
+    sptr<DeviceStatusCollectManager> GetCollectManager() const { return collectManager_; }
 #endif
 
     void OnAbilityCallbackDied(const sptr<IRemoteObject>& remoteObject);

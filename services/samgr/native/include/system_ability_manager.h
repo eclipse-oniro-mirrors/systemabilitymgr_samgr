@@ -105,6 +105,7 @@ public:
     int32_t UnloadProcess(const std::vector<std::u16string>& processList) override;
     int32_t GetLruIdleSystemAbilityProc(std::vector<IdleProcessInfo>& processInfos) override;
     int32_t OnStartSystemAbilityFail(int32_t systemAbilityId, int32_t errCode) override;
+    void ProcessOnDemandEvent(const OnDemandEvent& event, const std::list<SaControlInfo>& saControlList) override;
     sptr<IRemoteObject> GetSystemAbilityFromRemote(int32_t systemAbilityId);
     bool LoadSystemAbilityFromRpc(const std::string& srcDeviceId, int32_t systemAbilityId,
         const sptr<ISystemAbilityLoadCallback>& callback);

@@ -948,6 +948,30 @@ int32_t SystemAbilityManager::OnStartSystemAbilityFail(int32_t systemAbilityId, 
     return BaseSystemAbilityManager::OnStartSystemAbilityFail(systemAbilityId, errCode);
 }
 
+void SystemAbilityManager::ProcessOnDemandEvent(const OnDemandEvent& event,
+    const std::list<SaControlInfo>& saControlList)
+{
+    BaseSystemAbilityManager::ProcessOnDemandEvent(event, saControlList);
+#ifdef SUPPORT_MULTI_INSTANCE
+    // Device online/offline is a system-wide event that must reach all multi-instance users.
+    // Each multi-instance manager re-matches the event against its own onDemandSaProfiles_
+    // via its collectManager_, because saControlList was built from the base user's profiles.
+    if (event.eventId != DEVICE_ONLINE) {
+        return;
+    }
+    for (int32_t userId : userLifecycleManager_.GetValidUserIds()) {
+        auto mgr = GetMultiUserManager(userId);
+        if (mgr == nullptr) {
+            continue;
+        }
+        auto collectMgr = mgr->GetCollectManager();
+        if (collectMgr != nullptr) {
+            collectMgr->ReportEvent(event);
+        }
+    }
+#endif
+}
+
 sptr<IRemoteObject> SystemAbilityManager::GetLocalAbilityManagerProxy(int32_t systemAbilityId)
 {
 #ifdef SUPPORT_MULTI_INSTANCE

@@ -56,6 +56,13 @@ void DeviceNetworkingCollect::SetFfrt()
 int32_t DeviceNetworkingCollect::OnStart()
 {
     HILOGI("DeviceNetworkingCollect OnStart called");
+#ifdef SUPPORT_MULTI_INSTANCE
+    auto manager = manager_.lock();
+    if (manager != nullptr && manager->GetUserId() != BASE_USER) {
+        HILOGD("OnStart skip multi-user, userId:%{public}d", manager->GetUserId());
+        return ERR_OK;
+    }
+#endif
     workHandler_ = std::make_shared<WorkHandler>(this);
     initCallback_ = std::make_shared<DeviceInitCallBack>(workHandler_);
     stateCallback_ = std::make_shared<DeviceStateCallback>(this);
@@ -65,6 +72,13 @@ int32_t DeviceNetworkingCollect::OnStart()
 
 int32_t DeviceNetworkingCollect::OnStop()
 {
+#ifdef SUPPORT_MULTI_INSTANCE
+    auto manager = manager_.lock();
+    if (manager != nullptr && manager->GetUserId() != BASE_USER) {
+        HILOGD("OnStop skip multi-user, userId:%{public}d", manager->GetUserId());
+        return ERR_OK;
+    }
+#endif
     {
         SamgrXCollie samgrXCollie("samgr--UnRegisterDevStateCallback");
         DeviceManager::GetInstance().UnRegisterDevStateCallback(PKG_NAME);

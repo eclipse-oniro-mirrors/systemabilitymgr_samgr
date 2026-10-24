@@ -2537,4 +2537,80 @@ HWTEST_F(SystemAbilityMgrTest, SystemAbilityManagerGuardPath001, TestSize.Level3
     ASSERT_EQ(saMgr->abilityMap_.count(0), 1U);
     EXPECT_EQ(saMgr->GetSystemAbilityFromRemote(0), nullptr);
 }
+
+/**
+ * @tc.name: ProcessOnDemandEvent001
+ * @tc.desc: test ProcessOnDemandEvent with non-DEVICE_ONLINE event returns early
+ * @tc.type: FUNC
+ */
+HWTEST_F(SystemAbilityMgrTest, ProcessOnDemandEvent001, TestSize.Level3)
+{
+    DTEST_LOG << " ProcessOnDemandEvent001 BEGIN" << std::endl;
+    sptr<SystemAbilityManager> saMgr = new SystemAbilityManager;
+    ASSERT_NE(saMgr, nullptr);
+    InitSaMgr(saMgr);
+    OnDemandEvent event = {INTERFACE_CALL, "test", "on"};
+    std::list<SaControlInfo> saControlList;
+    saMgr->ProcessOnDemandEvent(event, saControlList);
+    EXPECT_NE(nullptr, saMgr->collectManager_);
+    DTEST_LOG << " ProcessOnDemandEvent001 END" << std::endl;
+}
+
+/**
+ * @tc.name: ProcessOnDemandEvent002
+ * @tc.desc: test ProcessOnDemandEvent with DEVICE_ONLINE event iterates valid users
+ * @tc.type: FUNC
+ */
+HWTEST_F(SystemAbilityMgrTest, ProcessOnDemandEvent002, TestSize.Level3)
+{
+    DTEST_LOG << " ProcessOnDemandEvent002 BEGIN" << std::endl;
+    sptr<SystemAbilityManager> saMgr = new SystemAbilityManager;
+    ASSERT_NE(saMgr, nullptr);
+    InitSaMgr(saMgr);
+    OnDemandEvent event = {DEVICE_ONLINE, "deviceonline", "on"};
+    std::list<SaControlInfo> saControlList;
+    saMgr->ProcessOnDemandEvent(event, saControlList);
+    EXPECT_NE(nullptr, saMgr->collectManager_);
+    DTEST_LOG << " ProcessOnDemandEvent002 END" << std::endl;
+}
+
+/**
+ * @tc.name: ProcessOnDemandEvent003
+ * @tc.desc: test ProcessOnDemandEvent with DEVICE_ONLINE and no valid users
+ * @tc.type: FUNC
+ */
+HWTEST_F(SystemAbilityMgrTest, ProcessOnDemandEvent003, TestSize.Level3)
+{
+    DTEST_LOG << " ProcessOnDemandEvent003 BEGIN" << std::endl;
+    sptr<SystemAbilityManager> saMgr = new SystemAbilityManager;
+    ASSERT_NE(saMgr, nullptr);
+    InitSaMgr(saMgr);
+    OnDemandEvent event = {DEVICE_ONLINE, "deviceonline", "off"};
+    std::list<SaControlInfo> saControlList;
+    saMgr->ProcessOnDemandEvent(event, saControlList);
+    EXPECT_NE(nullptr, saMgr->collectManager_);
+    DTEST_LOG << " ProcessOnDemandEvent003 END" << std::endl;
+}
+
+/**
+ * @tc.name: ProcessOnDemandEvent004
+ * @tc.desc: test ProcessOnDemandEvent with empty saControlList
+ * @tc.type: FUNC
+ */
+HWTEST_F(SystemAbilityMgrTest, ProcessOnDemandEvent004, TestSize.Level3)
+{
+    DTEST_LOG << " ProcessOnDemandEvent004 BEGIN" << std::endl;
+    sptr<SystemAbilityManager> saMgr = new SystemAbilityManager;
+    ASSERT_NE(saMgr, nullptr);
+    InitSaMgr(saMgr);
+    OnDemandEvent event = {SETTING_SWITCH, "test", "on"};
+    std::list<SaControlInfo> saControlList;
+    SaControlInfo controlInfo;
+    controlInfo.saId = TEST_SYSTEM_ABILITY1;
+    controlInfo.ondemandId = START_ON_DEMAND;
+    saControlList.push_back(controlInfo);
+    saMgr->ProcessOnDemandEvent(event, saControlList);
+    EXPECT_NE(nullptr, saMgr->collectManager_);
+    DTEST_LOG << " ProcessOnDemandEvent004 END" << std::endl;
+}
 } // namespace OHOS

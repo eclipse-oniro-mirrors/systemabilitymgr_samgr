@@ -31,7 +31,7 @@
     _RNv*5samgr*20SystemAbilityManager*;
 
     /* ---- samgr::manage::UnsubscribeHandler ---- */
-    _RNv*5samgr*18UnsubscribeHandler11unsubscribe;
+    _RNv*5samgr*18UnsubscribeHandler*;
 
     /* ---- samgr::wrapper::ffi::AddSystemAbility ---- */
     _RNv*5samgr*16AddSystemAbility;

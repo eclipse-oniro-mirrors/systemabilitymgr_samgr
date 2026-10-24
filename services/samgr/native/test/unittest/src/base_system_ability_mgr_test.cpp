@@ -2542,6 +2542,47 @@ HWTEST_F(BaseSystemAbilityMgrTest, IdleAndActiveNonBaseUserBranches001, TestSize
 }
 
 /**
+ * @tc.name: GetCollectManager001
+ * @tc.desc: test GetCollectManager returns the correct collectManager_
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, GetCollectManager001, TestSize.Level3)
+{
+    DTEST_LOG << " GetCollectManager001 BEGIN" << std::endl;
+#ifdef SUPPORT_MULTI_INSTANCE
+    sptr<SystemAbilityManager> saMgr = new SystemAbilityManager;
+    ASSERT_NE(saMgr, nullptr);
+    InitSaMgr(saMgr);
+    auto collectMgr = saMgr->GetCollectManager();
+    EXPECT_NE(nullptr, collectMgr);
+    EXPECT_EQ(collectMgr.GetRefPtr(), saMgr->collectManager_.GetRefPtr());
+#else
+    DTEST_LOG << " SUPPORT_MULTI_INSTANCE not defined, skip" << std::endl;
+#endif
+    DTEST_LOG << " GetCollectManager001 END" << std::endl;
+}
+
+/**
+ * @tc.name: GetCollectManager002
+ * @tc.desc: test GetCollectManager returns nullptr when collectManager_ is not set
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, GetCollectManager002, TestSize.Level3)
+{
+    DTEST_LOG << " GetCollectManager002 BEGIN" << std::endl;
+#ifdef SUPPORT_MULTI_INSTANCE
+    sptr<SystemAbilityManager> saMgr = new SystemAbilityManager;
+    ASSERT_NE(saMgr, nullptr);
+    saMgr->collectManager_ = nullptr;
+    auto collectMgr = saMgr->GetCollectManager();
+    EXPECT_EQ(nullptr, collectMgr);
+#else
+    DTEST_LOG << " SUPPORT_MULTI_INSTANCE not defined, skip" << std::endl;
+#endif
+    DTEST_LOG << " GetCollectManager002 END" << std::endl;
+}
+
+/**
  * @tc.name: StartOndemandAutoRestart001
  * @tc.desc: test StartDynamicSystemProcess uses START_ONDEMAND action
  * @tc.type: FUNC

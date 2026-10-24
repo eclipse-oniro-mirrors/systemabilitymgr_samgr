@@ -746,4 +746,94 @@ HWTEST_F(DeviceNetworkingCollectTest, IsDmReadyWithManager001, TestSize.Level3)
     saMgr->CleanFfrt();
     DTEST_LOG << "IsDmReadyWithManager001 end" << std::endl;
 }
+
+/**
+ * @tc.name: OnStartMultiUserSkip001
+ * @tc.desc: test OnStart skips for non-base user under SUPPORT_MULTI_INSTANCE
+ * @tc.type: FUNC
+ */
+HWTEST_F(DeviceNetworkingCollectTest, OnStartMultiUserSkip001, TestSize.Level3)
+{
+    DTEST_LOG << " OnStartMultiUserSkip001 BEGIN" << std::endl;
+#ifdef SUPPORT_MULTI_INSTANCE
+    constexpr int32_t NON_BASE_USER_ID = 100;
+    class NonBaseUserMgr final : public BaseSystemAbilityManager {
+    public:
+        int32_t GetUserId() const override { return NON_BASE_USER_ID; }
+    };
+    auto nonBaseUserMgr = std::make_shared<NonBaseUserMgr>();
+    sptr<DeviceStatusCollectManager> collect =
+        new DeviceStatusCollectManager(std::weak_ptr<BaseSystemAbilityManager>{});
+    sptr<DeviceNetworkingCollect> networkingCollect =
+        new DeviceNetworkingCollect(collect, std::weak_ptr<BaseSystemAbilityManager>(nonBaseUserMgr));
+    int32_t ret = networkingCollect->OnStart();
+    EXPECT_EQ(0, ret);
+    EXPECT_EQ(nullptr, networkingCollect->workHandler_);
+    EXPECT_EQ(nullptr, networkingCollect->initCallback_);
+    EXPECT_EQ(nullptr, networkingCollect->stateCallback_);
+#else
+    DTEST_LOG << " SUPPORT_MULTI_INSTANCE not defined, skip" << std::endl;
+#endif
+    DTEST_LOG << " OnStartMultiUserSkip001 END" << std::endl;
+}
+
+/**
+ * @tc.name: OnStopMultiUserSkip001
+ * @tc.desc: test OnStop skips for non-base user under SUPPORT_MULTI_INSTANCE
+ * @tc.type: FUNC
+ */
+HWTEST_F(DeviceNetworkingCollectTest, OnStopMultiUserSkip001, TestSize.Level3)
+{
+    DTEST_LOG << " OnStopMultiUserSkip001 BEGIN" << std::endl;
+#ifdef SUPPORT_MULTI_INSTANCE
+    constexpr int32_t NON_BASE_USER_ID = 100;
+    class NonBaseUserMgr final : public BaseSystemAbilityManager {
+    public:
+        int32_t GetUserId() const override { return NON_BASE_USER_ID; }
+    };
+    auto nonBaseUserMgr = std::make_shared<NonBaseUserMgr>();
+    sptr<DeviceStatusCollectManager> collect =
+        new DeviceStatusCollectManager(std::weak_ptr<BaseSystemAbilityManager>{});
+    sptr<DeviceNetworkingCollect> networkingCollect =
+        new DeviceNetworkingCollect(collect, std::weak_ptr<BaseSystemAbilityManager>(nonBaseUserMgr));
+    int32_t ret = networkingCollect->OnStop();
+    EXPECT_EQ(0, ret);
+    EXPECT_EQ(nullptr, networkingCollect->workHandler_);
+#else
+    DTEST_LOG << " SUPPORT_MULTI_INSTANCE not defined, skip" << std::endl;
+#endif
+    DTEST_LOG << " OnStopMultiUserSkip001 END" << std::endl;
+}
+
+/**
+ * @tc.name: OnStartNullManagerMultiUser001
+ * @tc.desc: test OnStart proceeds when manager is null under SUPPORT_MULTI_INSTANCE
+ * @tc.type: FUNC
+ */
+HWTEST_F(DeviceNetworkingCollectTest, OnStartNullManagerMultiUser001, TestSize.Level3)
+{
+    DTEST_LOG << " OnStartNullManagerMultiUser001 BEGIN" << std::endl;
+#ifdef SUPPORT_MULTI_INSTANCE
+    sptr<DeviceStatusCollectManager> collect =
+        new DeviceStatusCollectManager(std::weak_ptr<BaseSystemAbilityManager>{});
+    sptr<DeviceNetworkingCollect> networkingCollect = new DeviceNetworkingCollect(collect);
+    int32_t ret = networkingCollect->OnStart();
+    auto initDoneTask = []() {
+        std::lock_guard<std::mutex> autoLock(caseDoneLock_);
+        isCaseDone_ = true;
+        caseDoneCondition_.notify_all();
+    };
+    networkingCollect->workHandler_->handler_->PostTask(initDoneTask);
+    std::unique_lock<std::mutex> lock(caseDoneLock_);
+    caseDoneCondition_.wait_for(lock, std::chrono::milliseconds(MAX_WAIT_TIME),
+        [&] () { return isCaseDone_; });
+    isCaseDone_ = false;
+    EXPECT_NE(nullptr, networkingCollect->workHandler_);
+    EXPECT_NE(nullptr, networkingCollect->initCallback_);
+    networkingCollect->workHandler_->CleanFfrt();
+#else
+    DTEST_LOG << " SUPPORT_MULTI_INSTANCE not defined, skip" << std::endl;
+#endif
+    DTEST_LOG << " OnStartNullManagerMultiUser001 END" << std::endl;
+}
 } // namespace OHOS
