@@ -1427,27 +1427,41 @@ bool BaseSystemAbilityManager::IsInitBootFinished()
     return initTime != DEFAULT_BOOT_INIT_TIME;
 }
 
+void BaseSystemAbilityManager::WaitForProcessStopped(const std::u16string& name, int32_t systemAbilityId)
+{
+    if (!abilityStateScheduler_ || abilityStateScheduler_->IsSystemProcessNeverStartedLocked(name)) {
+        return;
+    }
+    int ret = ServiceWaitForStatus(Str16ToStr8(name).c_str(), ServiceStatus::SERVICE_STOPPED, 1);
+    if (ret != 0) {
+        HILOGE("ServiceWaitForStatus proc:%{public}s,SA:%{public}d timeout",
+            Str16ToStr8(name).c_str(), systemAbilityId);
+    }
+}
+
 int32_t BaseSystemAbilityManager::StartDynamicSystemProcess(const std::u16string& name,
     int32_t systemAbilityId, const OnDemandEvent& event)
 {
     std::string eventStr = std::to_string(systemAbilityId) + "#" + std::to_string(event.eventId) + "#"
         + event.name + "#" + event.value + "#" + std::to_string(event.extraDataId) + "#";
     auto extraArgv = eventStr.c_str();
-    if (abilityStateScheduler_ && !abilityStateScheduler_->IsSystemProcessNeverStartedLocked(name)) {
-        // Waiting for the init subsystem to perceive process death
-        int ret = ServiceWaitForStatus(Str16ToStr8(name).c_str(), ServiceStatus::SERVICE_STOPPED, 1);
-        if (ret != 0) {
-            HILOGE("ServiceWaitForStatus proc:%{public}s,SA:%{public}d timeout",
-                Str16ToStr8(name).c_str(), systemAbilityId);
-        }
-    }
     int64_t begin = GetTickCount();
     int result = ERR_INVALID_VALUE;
     SamgrXCollie samgrXCollie("samgr--startProccess_" + ToString(systemAbilityId));
-    if (!IsInitBootFinished()) {
-        result = ServiceControlWithExtra(Str16ToStr8(name).c_str(), ServiceAction::START, &extraArgv, 1);
+    if (event.name == "restart") {
+        result = ServiceControlWithExtra(Str16ToStr8(name).c_str(), ServiceAction::START_ONDEMAND,
+            &extraArgv, 1);
+        if (result != 0) {
+            HILOGW("START_ONDEMAND failed for proc:%{public}s,SA:%{public}d, fallback to START",
+                Str16ToStr8(name).c_str(), systemAbilityId);
+            WaitForProcessStopped(name, systemAbilityId);
+            result = ServiceControlWithExtra(Str16ToStr8(name).c_str(), ServiceAction::START,
+                &extraArgv, 1);
+        }
     } else {
-        result = ServiceControlWithExtra(Str16ToStr8(name).c_str(), ServiceAction::START, &extraArgv, 1);
+        WaitForProcessStopped(name, systemAbilityId);
+        result = ServiceControlWithExtra(Str16ToStr8(name).c_str(), ServiceAction::START,
+            &extraArgv, 1);
     }
 
     int64_t duration = GetTickCount() - begin;

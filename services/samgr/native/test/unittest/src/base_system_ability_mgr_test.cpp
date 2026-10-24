@@ -36,6 +36,9 @@
 #include "system_ability_manager.h"
 #include "system_ability_manager_util.h"
 #include "tools.h"
+#include "service_control.h"
+#include "mock_service_control.h"
+#include "schedule/system_ability_state_scheduler.h"
 
 using namespace std;
 using namespace testing;
@@ -2536,6 +2539,126 @@ HWTEST_F(BaseSystemAbilityMgrTest, IdleAndActiveNonBaseUserBranches001, TestSize
     EXPECT_TRUE(manager->IdleSystemAbility(SAID, PROCESS_NAME, nlohmann::json::object(), delayTime));
     EXPECT_TRUE(manager->ActiveSystemAbility(SAID, PROCESS_NAME, nlohmann::json::object()));
     EXPECT_EQ(manager->GetUserId(), 100);
+}
+
+/**
+ * @tc.name: StartOndemandAutoRestart001
+ * @tc.desc: test StartDynamicSystemProcess uses START_ONDEMAND action
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, StartOndemandAutoRestart001, TestSize.Level3)
+{
+    ResetMockServiceControl();
+    SetMockServiceControlReturn(0);
+    auto manager = std::make_shared<BaseSystemAbilityManager>();
+    OnDemandEvent event = {INTERFACE_CALL, "restart"};
+    int32_t result = manager->StartDynamicSystemProcess(PROCESS_NAME, SAID, event);
+    EXPECT_EQ(result, 0);
+    EXPECT_EQ(g_mockServiceControl.lastAction, static_cast<int32_t>(ServiceAction::START_ONDEMAND));
+    EXPECT_EQ(g_mockServiceControl.callCount, 1);
+}
+
+/**
+ * @tc.name: StartOnDemandNotFullyExited001
+ * @tc.desc: test START_ONDEMAND returns 0 when process not fully exited
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, StartOnDemandNotFullyExited001, TestSize.Level3)
+{
+    ResetMockServiceControl();
+    SetMockServiceControlReturn(0);
+    auto manager = std::make_shared<BaseSystemAbilityManager>();
+    OnDemandEvent event = {INTERFACE_CALL, "restart"};
+    int32_t result = manager->StartDynamicSystemProcess(PROCESS_NAME, SAID, event);
+    EXPECT_EQ(result, 0);
+}
+
+/**
+ * @tc.name: StartOnDemandNoWait001
+ * @tc.desc: test ServiceWaitForStatus is not called when using START_ONDEMAND
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, StartOnDemandNoWait001, TestSize.Level3)
+{
+    ResetMockServiceControl();
+    SetMockServiceControlReturn(0);
+    auto manager = std::make_shared<BaseSystemAbilityManager>();
+    OnDemandEvent event = {INTERFACE_CALL, "restart"};
+    int32_t result = manager->StartDynamicSystemProcess(PROCESS_NAME, SAID, event);
+    EXPECT_EQ(result, 0);
+    EXPECT_EQ(g_mockServiceControl.waitCallCount, 0);
+}
+
+/**
+ * @tc.name: StartOndemandFallback001
+ * @tc.desc: test START_ONDEMAND fails, fallback to START + ServiceWaitForStatus
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, StartOndemandFallback001, TestSize.Level3)
+{
+    ResetMockServiceControl();
+    SetMockServiceControlReturnSeq({-1, 0});
+    SetMockServiceControlWaitReturn(0);
+    auto manager = std::make_shared<BaseSystemAbilityManager>();
+    auto scheduler = std::make_shared<SystemAbilityStateScheduler>(
+        std::weak_ptr<BaseSystemAbilityManager>{});
+    auto procContext = std::make_shared<SystemProcessContext>();
+    procContext->pid = 100;
+    scheduler->processContextMap_[PROCESS_NAME] = procContext;
+    manager->abilityStateScheduler_ = scheduler;
+    OnDemandEvent event = {INTERFACE_CALL, "restart"};
+    int32_t result = manager->StartDynamicSystemProcess(PROCESS_NAME, SAID, event);
+    EXPECT_EQ(result, 0);
+    EXPECT_EQ(g_mockServiceControl.callCount, 2);
+    EXPECT_EQ(g_mockServiceControl.waitCallCount, 1);
+}
+
+/**
+ * @tc.name: StartOndemandFallbackFail001
+ * @tc.desc: test both START_ONDEMAND and START fail, verify error reporting
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, StartOndemandFallbackFail001, TestSize.Level3)
+{
+    ResetMockServiceControl();
+    SetMockServiceControlReturn(-1);
+    SetMockServiceControlWaitReturn(-1);
+    auto manager = std::make_shared<BaseSystemAbilityManager>();
+    auto scheduler = std::make_shared<SystemAbilityStateScheduler>(
+        std::weak_ptr<BaseSystemAbilityManager>{});
+    auto procContext = std::make_shared<SystemProcessContext>();
+    procContext->pid = 100;
+    scheduler->processContextMap_[PROCESS_NAME] = procContext;
+    manager->abilityStateScheduler_ = scheduler;
+    OnDemandEvent event = {INTERFACE_CALL, "restart"};
+    int32_t result = manager->StartDynamicSystemProcess(PROCESS_NAME, SAID, event);
+    EXPECT_NE(result, 0);
+    EXPECT_EQ(g_mockServiceControl.callCount, 2);
+    EXPECT_EQ(g_mockServiceControl.waitCallCount, 1);
+}
+
+/**
+ * @tc.name: NormalOnDemandLoadKeepStart001
+ * @tc.desc: test normal on-demand load (not restart) keeps original START action
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, NormalOnDemandLoadKeepStart001, TestSize.Level3)
+{
+    ResetMockServiceControl();
+    SetMockServiceControlReturn(0);
+    auto manager = std::make_shared<BaseSystemAbilityManager>();
+    auto scheduler = std::make_shared<SystemAbilityStateScheduler>(
+        std::weak_ptr<BaseSystemAbilityManager>{});
+    auto procContext = std::make_shared<SystemProcessContext>();
+    procContext->pid = 100;
+    scheduler->processContextMap_[PROCESS_NAME] = procContext;
+    manager->abilityStateScheduler_ = scheduler;
+    OnDemandEvent event = {INTERFACE_CALL, "load"};
+    int32_t result = manager->StartDynamicSystemProcess(PROCESS_NAME, SAID, event);
+    EXPECT_EQ(result, 0);
+    EXPECT_EQ(g_mockServiceControl.lastAction, static_cast<int32_t>(ServiceAction::START));
+    EXPECT_EQ(g_mockServiceControl.callCount, 1);
+    EXPECT_EQ(g_mockServiceControl.waitCallCount, 1);
 }
 
 } // namespace OHOS
