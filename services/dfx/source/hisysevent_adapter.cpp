@@ -63,6 +63,9 @@ constexpr const char* DURATION = "DURATION";
 constexpr const char* KEY_STAGE = "KEY_STAGE";
 constexpr int32_t CONTAINER_SA_MIN = 0x00010500; //66816
 constexpr int32_t CONTAINER_SA_MAX = 0x0001055f; //66911
+constexpr int64_t SA_LOAD_DURATION_THRESHOLD_MS = 200;
+constexpr int64_t SA_UNLOAD_DURATION_THRESHOLD_MS = 100;
+constexpr int64_t PROCESS_DURATION_THRESHOLD_MS = 500;
 }
 
 static bool IsInCrashWhiteList(int32_t saId)
@@ -139,11 +142,17 @@ void ReportSaMainExit(const std::string& reason)
 
 void ReportSaLoadDuration(int32_t saId, int32_t keyStage, int64_t duration)
 {
+    if (duration < SA_LOAD_DURATION_THRESHOLD_MS) {
+        return;
+    }
     ReportSaDuration(SA_LOAD_DURATION, saId, keyStage, duration);
 }
 
 void ReportSaUnLoadDuration(int32_t saId, int32_t keyStage, int64_t duration)
 {
+    if (duration < SA_UNLOAD_DURATION_THRESHOLD_MS) {
+        return;
+    }
     ReportSaDuration(SA_UNLOAD_DURATION, saId, keyStage, duration);
 }
 
@@ -168,6 +177,9 @@ static void ReportProcessDuration(const std::string& eventName, const std::strin
 
 void ReportProcessStartDuration(const ProcessStartDurationInfo& procStartDurInfo)
 {
+    if (procStartDurInfo.duration <= PROCESS_DURATION_THRESHOLD_MS) {
+        return;
+    }
     int ret = HiSysEventWrite(HiSysEvent::Domain::SAMGR,
         PROCESS_START_DURATION,
         HiSysEvent::EventType::BEHAVIOR,
@@ -188,6 +200,9 @@ void ReportProcessStartDuration(const ProcessStartDurationInfo& procStartDurInfo
 
 void ReportProcessStopDuration(const std::string& processName, int32_t pid, int32_t uid, int64_t duration)
 {
+    if (duration <= PROCESS_DURATION_THRESHOLD_MS) {
+        return;
+    }
     ReportProcessDuration(PROCESS_STOP_DURATION, processName, pid, uid, duration);
 }
 
