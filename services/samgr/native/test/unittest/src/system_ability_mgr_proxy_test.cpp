@@ -1928,6 +1928,38 @@ HWTEST_F(SystemAbilityMgrProxyTest, OnUserStateChanged002, TestSize.Level3)
 
 #ifdef SUPPORT_MULTI_INSTANCE
 /**
+ * @tc.name: CheckSystemAbilityByUserId001
+ * @tc.desc: Test CheckSystemAbilityByUserId with real proxy
+ * @tc.type: FUNC
+ */
+HWTEST_F(SystemAbilityMgrProxyTest, CheckSystemAbilityByUserId001, TestSize.Level3)
+{
+    DTEST_LOG << " CheckSystemAbilityByUserId001 begin " << std::endl;
+    sptr<ISystemAbilityManager> samgrProxy = SystemAbilityManagerClient::GetInstance().GetSystemAbilityManager();
+    bool isExist = false;
+    auto ret = samgrProxy->CheckSystemAbilityByUserId(TEST_SA_VAILD, isExist, TEST_USER_ID);
+    EXPECT_EQ(ret, nullptr);
+    DTEST_LOG << " CheckSystemAbilityByUserId001 end " << std::endl;
+}
+
+/**
+ * @tc.name: CheckSystemAbilityByUserId002
+ * @tc.desc: Test CheckSystemAbilityByUserId with mock
+ * @tc.type: FUNC
+ */
+HWTEST_F(SystemAbilityMgrProxyTest, CheckSystemAbilityByUserId002, TestSize.Level3)
+{
+    DTEST_LOG << " CheckSystemAbilityByUserId002 begin " << std::endl;
+    sptr<ISystemAbilityManager> samgrMock = new ISystemAbilityManagerMock;
+    EXPECT_TRUE(samgrMock != nullptr);
+
+    bool isExist = false;
+    auto ret = samgrMock->CheckSystemAbilityByUserId(TEST_SA_VAILD, isExist, TEST_USER_ID);
+    EXPECT_EQ(ret, nullptr);
+    DTEST_LOG << " CheckSystemAbilityByUserId002 end " << std::endl;
+}
+
+/**
  * @tc.name: MultiUserProxy001
  * @tc.desc: Test multi-user proxy APIs reject invalid system ability IDs
  * @tc.type: FUNC
