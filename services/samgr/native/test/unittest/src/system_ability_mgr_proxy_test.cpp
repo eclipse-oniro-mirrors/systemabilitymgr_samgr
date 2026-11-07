@@ -1937,7 +1937,7 @@ HWTEST_F(SystemAbilityMgrProxyTest, CheckSystemAbilityByUserId001, TestSize.Leve
     DTEST_LOG << " CheckSystemAbilityByUserId001 begin " << std::endl;
     sptr<ISystemAbilityManager> samgrProxy = SystemAbilityManagerClient::GetInstance().GetSystemAbilityManager();
     bool isExist = false;
-    auto ret = samgrProxy->CheckSystemAbilityByUserId(TEST_SA_VAILD, isExist, TEST_USER_ID);
+    auto ret = samgrProxy->CheckSystemAbilityByUserId(TEST_ID_VAILD, isExist, TEST_USER_ID);
     EXPECT_EQ(ret, nullptr);
     DTEST_LOG << " CheckSystemAbilityByUserId001 end " << std::endl;
 }
@@ -1954,7 +1954,7 @@ HWTEST_F(SystemAbilityMgrProxyTest, CheckSystemAbilityByUserId002, TestSize.Leve
     EXPECT_TRUE(samgrMock != nullptr);
 
     bool isExist = false;
-    auto ret = samgrMock->CheckSystemAbilityByUserId(TEST_SA_VAILD, isExist, TEST_USER_ID);
+    auto ret = samgrMock->CheckSystemAbilityByUserId(TEST_ID_VAILD, isExist, TEST_USER_ID);
     EXPECT_EQ(ret, nullptr);
     DTEST_LOG << " CheckSystemAbilityByUserId002 end " << std::endl;
 }
