@@ -20,3 +20,5 @@ persist.samgr.moduleupdate.start = false
 const.samgr.setprior.support = false
 
 const.samgr.setdeathprior.support = false
+
+const.samgr.settopprior.support = false

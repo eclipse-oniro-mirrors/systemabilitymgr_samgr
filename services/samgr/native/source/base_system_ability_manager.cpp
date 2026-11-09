@@ -124,6 +124,7 @@ constexpr int64_t CHECK_LOADED_DELAY_TIME = 12 * 1000; // ms
 constexpr int64_t CHECK_LOADED_DELAY_TIME = 4 * 1000; // ms
 #endif
 constexpr int32_t KILL_TIMEOUT_TIME = 60; // s
+constexpr int32_t INIT_PID = 1;
 }
 
 BaseSystemAbilityManager::~BaseSystemAbilityManager()
@@ -995,6 +996,9 @@ int32_t BaseSystemAbilityManager::AddSystemAbility(int32_t systemAbilityId, cons
     abilityStateScheduler_->UpdateLimitDelayUnloadTime(systemAbilityId);
     abilityStateScheduler_->SendAbilityStateEvent(systemAbilityId, AbilityStateEvent::ABILITY_LOAD_SUCCESS_EVENT);
     SendSystemAbilityAddedMsg(systemAbilityId, ability);
+    if (SamgrUtil::CheckSupportSetTopPrior()) {
+        OnHighPriorityAbilityRegistered(systemAbilityId, IPCSkeleton::GetCallingPid());
+    }
     return ERR_OK;
 }
 
@@ -1046,6 +1050,9 @@ int32_t BaseSystemAbilityManager::AddSystemProcess(const u16string& procName,
     ProcessStartDurationInfo procStartDurInfo = {Str16ToStr8(procName), callingPid, callingUid,
         duration, info.callPname, info.callingPid, info.callUid, info.calleeSaId};
     ReportProcessStartDuration(procStartDurInfo);
+    if (SamgrUtil::CheckSupportSetTopPrior()) {
+        OnHighPriorityProcessRegistered(procName);
+    }
     if (abilityStateScheduler_ == nullptr) {
         HILOGE("abilityStateScheduler is nullptr");
         return ERR_INVALID_VALUE;
@@ -1083,6 +1090,9 @@ int32_t BaseSystemAbilityManager::RemoveSystemProcess(const sptr<IRemoteObject>&
         }
     }
     if (result == ERR_OK) {
+        if (SamgrUtil::CheckSupportSetTopPrior()) {
+            CleanHighPriorityLoadOnProcessDied(processName);
+        }
         if (abilityStateScheduler_ == nullptr) {
             HILOGE("abilityStateScheduler is nullptr");
             return ERR_INVALID_VALUE;
@@ -1272,6 +1282,9 @@ void BaseSystemAbilityManager::SendCheckLoadedMsg(int32_t systemAbilityId, const
             return;
         }
         LHILOGD("SendCheckLoadedMsg handle for SA:%{public}d", systemAbilityId);
+        if (SamgrUtil::CheckSupportSetTopPrior()) {
+            self->ExitHighPriorityLoad(systemAbilityId, "load timeout");
+        }
         self->CleanCallbackForLoadFailed(systemAbilityId, name, srcDeviceId, callback);
         if (self->abilityStateScheduler_ == nullptr) {
             LHILOGE("abilityStateScheduler is nullptr");
@@ -1445,6 +1458,11 @@ int32_t BaseSystemAbilityManager::StartDynamicSystemProcess(const std::u16string
     std::string eventStr = std::to_string(systemAbilityId) + "#" + std::to_string(event.eventId) + "#"
         + event.name + "#" + event.value + "#" + std::to_string(event.extraDataId) + "#";
     auto extraArgv = eventStr.c_str();
+    bool isHighPriority = false;
+    if (SamgrUtil::CheckSupportSetTopPrior()) {
+        lock_guard<samgr::mutex> autoLock(highPriorityLoadLock_);
+        isHighPriority = (highPriorityLoadMap_.count(systemAbilityId) != 0);
+    }
     int64_t begin = GetTickCount();
     int result = ERR_INVALID_VALUE;
     SamgrXCollie samgrXCollie("samgr--startProccess_" + ToString(systemAbilityId));
@@ -1458,6 +1476,10 @@ int32_t BaseSystemAbilityManager::StartDynamicSystemProcess(const std::u16string
             result = ServiceControlWithExtra(Str16ToStr8(name).c_str(), ServiceAction::START,
                 &extraArgv, 1);
         }
+    } else if (isHighPriority) {
+        WaitForProcessStopped(name, systemAbilityId);
+        result = ServiceControlWithExtra(Str16ToStr8(name).c_str(), ServiceAction::START_HIGH_PRIORITY,
+            &extraArgv, 1);
     } else {
         WaitForProcessStopped(name, systemAbilityId);
         result = ServiceControlWithExtra(Str16ToStr8(name).c_str(), ServiceAction::START,
@@ -1542,6 +1564,10 @@ int32_t BaseSystemAbilityManager::StartingSystemProcess(const std::u16string& pr
             startingProcessMap_.emplace(procName, std::move(startingProcessInfo));
         }
     }
+    // Enter only on fresh spawn: the process is neither started nor starting
+    if (SamgrUtil::CheckSupportSetTopPrior() && IsHighPriorityLoadCaller(IPCSkeleton::GetCallingPid())) {
+        EnterHighPriorityLoad(systemAbilityId, procName);
+    }
     int32_t result = StartDynamicSystemProcess(procName, systemAbilityId, event);
     if (result != ERR_OK) {
         lock_guard<samgr::mutex> autoLock(startingProcessMapLock_);
@@ -1551,6 +1577,102 @@ int32_t BaseSystemAbilityManager::StartingSystemProcess(const std::u16string& pr
         }
     }
     return result;
+}
+
+bool BaseSystemAbilityManager::IsHighPriorityLoadCaller(int32_t callingPid)
+{
+    if (callingPid <= 0 || !SamgrUtil::CheckSupportSetTopPrior()) {
+        return false;
+    }
+    if (!SamgrUtil::IsProcessTopApp(callingPid)) {
+        return false;
+    }
+    HILOGD("HiPrior caller pid:%{public}d", callingPid);
+    return true;
+}
+
+void BaseSystemAbilityManager::EnterHighPriorityLoad(int32_t systemAbilityId, const std::u16string& procName)
+{
+    {
+        lock_guard<samgr::mutex> autoLock(highPriorityLoadLock_);
+        highPriorityLoadMap_[systemAbilityId] = procName;
+    }
+    HILOGI("HiPrior enter SA:%{public}d proc:%{public}s",
+        systemAbilityId, Str16ToStr8(procName).c_str());
+    SamgrUtil::RaiseSaPrior(INIT_PID);
+}
+
+void BaseSystemAbilityManager::ExitHighPriorityLoad(int32_t systemAbilityId, const std::string& reason)
+{
+    {
+        lock_guard<samgr::mutex> autoLock(highPriorityLoadLock_);
+        if (highPriorityLoadMap_.erase(systemAbilityId) == 0) {
+            return;
+        }
+    }
+    HILOGI("HiPrior exit SA:%{public}d reason:%{public}s",
+        systemAbilityId, reason.c_str());
+}
+
+void BaseSystemAbilityManager::OnHighPriorityProcessRegistered(const std::u16string& procName)
+{
+    bool hasSession = false;
+    {
+        lock_guard<samgr::mutex> autoLock(highPriorityLoadLock_);
+        for (const auto& [systemAbilityId, sessionProcName] : highPriorityLoadMap_) {
+            if (sessionProcName != procName) {
+                continue;
+            }
+            hasSession = true;
+            HILOGI("HiPrior procReg restore init SA:%{public}d proc:%{public}s",
+                systemAbilityId, Str16ToStr8(procName).c_str());
+            break;
+        }
+    }
+    if (hasSession) {
+        SamgrUtil::RestoreSaPrior(INIT_PID);
+    }
+}
+
+void BaseSystemAbilityManager::OnHighPriorityAbilityRegistered(int32_t systemAbilityId, int32_t saProcessPid)
+{
+    {
+        lock_guard<samgr::mutex> autoLock(highPriorityLoadLock_);
+        if (highPriorityLoadMap_.erase(systemAbilityId) == 0) {
+            return;
+        }
+    }
+    HILOGI("HiPrior saReg restore proc SA:%{public}d pid:%{public}d",
+        systemAbilityId, saProcessPid);
+    SamgrUtil::RestoreSaPrior(saProcessPid);
+}
+
+void BaseSystemAbilityManager::CleanHighPriorityLoadOnProcessDied(const std::u16string& procName)
+{
+    lock_guard<samgr::mutex> autoLock(highPriorityLoadLock_);
+    for (auto iter = highPriorityLoadMap_.begin(); iter != highPriorityLoadMap_.end();) {
+        if (iter->second == procName) {
+            HILOGI("HiPrior procDied SA:%{public}d proc:%{public}s",
+                iter->first, Str16ToStr8(procName).c_str());
+            iter = highPriorityLoadMap_.erase(iter);
+        } else {
+            ++iter;
+        }
+    }
+}
+
+void BaseSystemAbilityManager::ReportSaLoadStartDfx(int32_t systemAbilityId, const std::u16string& procName,
+    const OnDemandEvent& event)
+{
+    auto callPid = IPCSkeleton::GetCallingPid();
+    auto callPname = SamgrUtil::GetProcessNameFromCmdline(callPid);
+    SystemProcessInfo procInfo;
+    if (abilityStateScheduler_ != nullptr) {
+        abilityStateScheduler_->GetRunningSystemProcess(procName, procInfo);
+    }
+    SamgrSaLoadInfo samgrSaLoadInfo = {systemAbilityId, callPname, callPid, IPCSkeleton::GetCallingUid(),
+        event.eventId, procInfo.processName, procInfo.pid, procInfo.uid};
+    ReportSamgrSaLoad(samgrSaLoadInfo);
 }
 
 int32_t BaseSystemAbilityManager::DoLoadSystemAbility(int32_t systemAbilityId, const std::u16string& procName,
@@ -1590,16 +1712,12 @@ int32_t BaseSystemAbilityManager::DoLoadSystemAbility(int32_t systemAbilityId, c
         HILOGI("DoLoadSA:%{public}d,%{public}zu_%{public}d%{public}s", systemAbilityId,
             abilityItem.callbackMap[LOCAL_DEVICE].size(), count, ret ? "" : ",AddDeath fail");
     }
-    auto callPid = IPCSkeleton::GetCallingPid();
-    auto callPname = SamgrUtil::GetProcessNameFromCmdline(callPid);
-    SystemProcessInfo procInfo;
-    if (abilityStateScheduler_ != nullptr) {
-        abilityStateScheduler_->GetRunningSystemProcess(procName, procInfo);
-    }
-    SamgrSaLoadInfo samgrSaLoadInfo = {systemAbilityId, callPname, callPid, IPCSkeleton::GetCallingUid(),
-        event.eventId, procInfo.processName, procInfo.pid, procInfo.uid};
-    ReportSamgrSaLoad(samgrSaLoadInfo);
+    ReportSaLoadStartDfx(systemAbilityId, procName, event);
     result = StartingSystemProcess(procName, systemAbilityId, event);
+    if (result != ERR_OK && SamgrUtil::CheckSupportSetTopPrior()) {
+        // no-op unless a high priority load session was recorded for this SA
+        ExitHighPriorityLoad(systemAbilityId, "start process failed");
+    }
     SendCheckLoadedMsg(systemAbilityId, procName, LOCAL_DEVICE, callback);
     return result;
 }
@@ -1774,6 +1892,9 @@ int32_t BaseSystemAbilityManager::OnStartSystemAbilityFail(int32_t systemAbility
         return ERR_OK;
     }
     RemoveCheckLoadedMsg(systemAbilityId);
+    if (SamgrUtil::CheckSupportSetTopPrior()) {
+        ExitHighPriorityLoad(systemAbilityId, "start ability failed");
+    }
     auto& abilityItem = iter->second;
     for (auto& [deviceId, callbackList] : abilityItem.callbackMap) {
         for (auto& callbackItem : callbackList) {

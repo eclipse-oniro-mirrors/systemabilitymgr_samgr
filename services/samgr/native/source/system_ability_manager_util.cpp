@@ -31,10 +31,40 @@
 #include "sam_log.h"
 #include "samgr_xcollie.h"
 #include "concurrent_task_client.h"
+#include <cerrno>
+#include <cstring>
+#include <fcntl.h>
+#include <climits>
+#include <mutex>
+#include <sys/ioctl.h>
 #ifdef SUPPORT_DEVICE_MANAGER
 #include "device_manager.h"
 using namespace OHOS::DistributedHardware;
 #endif
+
+#define SCHED_STATE_MAGIC 'S'
+
+struct SchedStateEvent {
+    uint32_t event;
+    uint32_t state;
+};
+
+#define SCHED_STATE_SET_STATE _IOW(SCHED_STATE_MAGIC, 1, SchedStateEvent)
+
+/* SCHED_EVENT_INIT_SA (2) is a dedicated event for init-SA QoS boost. */
+#define SCHED_EVENT_INIT_SA 2
+
+/* Action types encoded in state high byte */
+#define SCHED_INIT_SA_ENTER    1
+#define SCHED_INIT_SA_COMPLETE 2
+
+static constexpr uint32_t SCHED_STATE_ACTION_SHIFT = 24;
+static constexpr uint32_t SCHED_STATE_PAYLOAD_MASK = 0x00FFFFFF;
+
+static constexpr uint32_t EncodeSchedState(uint32_t action, uint32_t payload)
+{
+    return (action << SCHED_STATE_ACTION_SHIFT) | (payload & SCHED_STATE_PAYLOAD_MASK);
+}
 
 namespace OHOS {
 namespace fs = std::filesystem;
@@ -66,7 +96,10 @@ constexpr const char* PENGLAI_PATH = "profile/penglai";
 constexpr const char* LOGGER_TRANSPROC_PATH = "/proc/transaction_proc";
 constexpr const char* SET_PRIOR_PARAM = "const.samgr.setprior.support";
 constexpr const char* SET_DEATH_PRIOR_PARAM = "const.samgr.setdeathprior.support";
+constexpr const char* SET_TOP_PRIOR_PARAM = "const.samgr.settopprior.support";
 constexpr const char* SAMGR_CACHE_KEY = "samgr.cache.sa";
+constexpr const char* SCHED_STATE_DEV = "/dev/sched_state_report";
+
 #ifdef SUPPORT_DEVICE_MANAGER
 constexpr const char* PKG_NAME = "Samgr_Networking";
 #endif
@@ -328,6 +361,12 @@ bool SamgrUtil::CheckSupportSetDeathPrior()
     return supported;
 }
 
+bool SamgrUtil::CheckSupportSetTopPrior()
+{
+    static bool supported = system::GetBoolParameter(SET_TOP_PRIOR_PARAM, false);
+    return supported;
+}
+
 #ifdef SUPPORT_PENGLAI_MODE
 void* SamgrUtil::InitPenglaiFunc()
 {
@@ -509,6 +548,53 @@ int SamgrUtil::ParsePeerBinderPid(std::ifstream& fin, int32_t pid, int32_t tid)
     return -1;
 }
 
+bool SamgrUtil::IsTopAppCgroupLine(const std::string& line)
+{
+    constexpr const char* CPUSET_PREFIX = ":cpuset:";
+    constexpr const char* TOP_APP_PATH = "/top-app";
+    size_t subsysPos = line.find(CPUSET_PREFIX);
+    if (subsysPos == std::string::npos) {
+        return false;
+    }
+    std::string cgroupPath = line.substr(subsysPos + strlen(CPUSET_PREFIX));
+    return cgroupPath == TOP_APP_PATH || cgroupPath.rfind(std::string(TOP_APP_PATH) + "/", 0) == 0;
+}
+
+namespace {
+bool HasTopAppCgroup(std::ifstream& file, int32_t pid)
+{
+    std::string line;
+    while (std::getline(file, line)) {
+        if (SamgrUtil::IsTopAppCgroupLine(line)) {
+            HILOGD("IsProcessTopApp pid:%{public}d is top-app", pid);
+            return true;
+        }
+    }
+    HILOGD("IsProcessTopApp pid:%{public}d is not top-app", pid);
+    return false;
+}
+}
+
+bool SamgrUtil::IsProcessTopApp(int32_t pid)
+{
+    if (pid <= 0) {
+        HILOGE("IsProcessTopApp invalid pid:%{public}d", pid);
+        return false;
+    }
+    std::string path = "/proc/" + std::to_string(pid) + "/task/" + std::to_string(pid) + "/cgroup";
+    char resolvePath[PATH_MAX] = {0};
+    if (realpath(path.c_str(), resolvePath) == nullptr) {
+        HILOGE("IsProcessTopApp realpath error for pid:%{public}d", pid);
+        return false;
+    }
+    std::ifstream file(resolvePath);
+    if (!file.is_open()) {
+        HILOGE("IsProcessTopApp open file failed, %{public}s", resolvePath);
+        return false;
+    }
+    return HasTopAppCgroup(file, pid);
+}
+
 bool SamgrUtil::KillProcessByPid(int32_t pid, int32_t tid)
 {
     std::ifstream fin;
@@ -538,4 +624,77 @@ bool SamgrUtil::KillProcessByPid(int32_t pid, int32_t tid)
         (ret != 0) ? "failed" : "success", peerBinderPid, processName.c_str());
     return (ret == 0);
 }
+
+namespace {
+std::mutex g_schedStateMutex;
+int32_t g_schedStateFd = -1;
+
+int32_t OpenDev()
+{
+    if (g_schedStateFd >= 0) {
+        return 0;
+    }
+    g_schedStateFd = open(SCHED_STATE_DEV, O_RDWR | O_CLOEXEC);
+    if (g_schedStateFd < 0) {
+        int savedErrno = errno;
+        char errBuf[256] = {0};
+        strerror_r(savedErrno, errBuf, sizeof(errBuf));
+        HILOGE("OpenDev %{public}s failed, errno=%{public}d (%{public}s)", SCHED_STATE_DEV, savedErrno, errBuf);
+        return -1;
+    }
+    return 0;
+}
+
+int32_t SendEvent(uint32_t action, uint32_t payload)
+{
+    HILOGD("SendEvent action=%{public}u, payload=%{public}u", action, payload);
+    std::lock_guard<std::mutex> lock(g_schedStateMutex);
+    if (OpenDev() < 0) {
+        return -1;
+    }
+
+    SchedStateEvent ev = {};
+    ev.event = SCHED_EVENT_INIT_SA;
+    ev.state = EncodeSchedState(action, payload);
+
+    auto ret = ioctl(g_schedStateFd, SCHED_STATE_SET_STATE, &ev);
+    if (ret < 0) {
+        int savedErrno = errno;
+        char errBuf[256] = {0};
+        strerror_r(savedErrno, errBuf, sizeof(errBuf));
+        HILOGE("SendEvent SET_STATE failed, ret=%{public}d errno=%{public}d (%{public}s)", ret, savedErrno, errBuf);
+        return ret;
+    }
+    return 0;
+}
+}
+
+int32_t SamgrUtil::RaiseSaPrior(int32_t pid)
+{
+    HILOGD("RaiseSaPrior pid=%{public}d", pid);
+    if (pid <= 0) {
+        HILOGE("RaiseSaPrior invalid pid=%{public}d", pid);
+        return -1;
+    }
+    int32_t ret = SendEvent(SCHED_INIT_SA_ENTER, static_cast<uint32_t>(pid));
+    if (ret == 0) {
+        HILOGD("RaiseSaPrior ok pid=%{public}d", pid);
+    }
+    return ret;
+}
+
+int32_t SamgrUtil::RestoreSaPrior(int32_t pid)
+{
+    HILOGD("RestoreSaPrior pid=%{public}d", pid);
+    if (pid <= 0) {
+        HILOGE("RestoreSaPrior invalid pid=%{public}d", pid);
+        return -1;
+    }
+    int32_t ret = SendEvent(SCHED_INIT_SA_COMPLETE, static_cast<uint32_t>(pid));
+    if (ret == 0) {
+        HILOGD("RestoreSaPrior ok pid=%{public}d", pid);
+    }
+    return ret;
+}
+
 }
