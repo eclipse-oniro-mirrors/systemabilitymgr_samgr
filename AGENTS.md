@@ -50,6 +50,20 @@ etc/                       # samgr.para, samgr_standard.cfg
 | 获取samgr代理 | `iservice_registry.h` → `SystemAbilityManagerClient` |
 | dbinder/跨设备SA | `rpc_callback_imp.cpp` |
 
+### docs/knowledge 文档路由
+
+| 问题 | 先读 |
+|---|---|
+| samgr业务定位、职责边界、输入输出与协作服务 | [业务背景](docs/knowledge/business-context.md) |
+| 架构分层、部署关系、并发边界与构建入口 | [架构设计及约束](docs/knowledge/architecture.md) |
+| 修改代码前的并发、生命周期、IPC和配置约束 | [编码铁律](docs/knowledge/coding-standards.md) |
+| SA、LSA、按需事件、状态和缓存等术语 | [术语表](docs/knowledge/glossary.md) |
+| 注册记录、加载回调、调度上下文、用户manager等实体及生命周期 | [业务实体知识](docs/knowledge/samgr-Entity.md) |
+| 注册查询、加载卸载、死亡清理、事件、多用户、跨设备和缓存机制 | [技术机制知识](docs/knowledge/samgr-Technology.md) |
+
+按任务选择文档：先明确业务和术语，再查相关实体与机制，最后沿文中的源码路径深入；修改实现前核对编码约束。上述知识用于导航，具体行为仍需结合当前源码和实际配置确认。
+
+
 **关键术语**: `said`（SA ID，范围0x1–0x00ffffff）、ondemand（按需加载/卸载）、LSA（进程内LocalAbilityManager）、BootPhase（启动优先级: BootStart > CoreStart > OtherStart）、dbinder（跨设备RPC）。
 
 **按任务类型定位**:
