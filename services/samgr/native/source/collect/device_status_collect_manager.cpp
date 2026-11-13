@@ -13,6 +13,9 @@
  * limitations under the License.
  */
 
+#include <mutex>
+#include <shared_mutex>
+
 #include "device_status_collect_manager.h"
 
 #include "base_system_ability_manager.h"
@@ -74,8 +77,9 @@ void DeviceStatusCollectManager::Init(const std::list<SaProfile>& saProfiles)
 
 void DeviceStatusCollectManager::RemoveWhiteCommonEvent()
 {
-    if (IsExistInPluginMap(COMMON_EVENT) == ERR_OK) {
-        collectPluginMap_[COMMON_EVENT]->RemoveWhiteCommonEvent();
+    sptr<ICollectPlugin> plugin = GetPlugin(COMMON_EVENT);
+    if (plugin != nullptr) {
+        plugin->RemoveWhiteCommonEvent();
     }
 }
 
@@ -196,15 +200,13 @@ bool DeviceStatusCollectManager::CheckConditions(const OnDemandEvent& onDemandEv
         return true;
     }
     for (auto& condition : onDemandEvent.conditions) {
-        if (collectPluginMap_.count(condition.eventId) == 0) {
+        sptr<ICollectPlugin> plugin = GetPlugin(condition.eventId);
+        if (plugin == nullptr) {
             HILOGE("not support condition: %{public}d", condition.eventId);
             return false;
         }
-        if (collectPluginMap_[condition.eventId] == nullptr) {
-            HILOGE("not support condition: %{public}d", condition.eventId);
-            return false;
-        }
-        bool ret = collectPluginMap_[condition.eventId]->CheckCondition(condition);
+
+        bool ret = plugin->CheckCondition(condition);
         if (!ret) {
             HILOGD("CheckCondition:%{public}s, value:%{public}s not pass",
                 condition.name.c_str(), condition.value.c_str());
@@ -217,15 +219,12 @@ bool DeviceStatusCollectManager::CheckConditions(const OnDemandEvent& onDemandEv
 bool DeviceStatusCollectManager::CheckExtraMessages(const OnDemandEvent& ev1, const OnDemandEvent& ev2)
 {
     HILOGD("CheckExtraMessages begin evt1:%{public}d, evt2:%{public}d", ev1.eventId, ev2.eventId);
-    if (collectPluginMap_.count(ev1.eventId) == 0) {
-        HILOGE("not support CheckExtraMessages");
-        return false;
-    }
-    if (collectPluginMap_[ev1.eventId] == nullptr) {
+    sptr<ICollectPlugin> plugin = GetPlugin(ev1.eventId);
+    if (plugin == nullptr) {
         HILOGE("CommonEventCollect is nullptr");
         return false;
     }
-    if (collectPluginMap_[ev1.eventId]->CheckExtraMessage(ev1.extraDataId, ev2)) {
+    if (plugin->CheckExtraMessage(ev1.extraDataId, ev2)) {
         return true;
     }
     return false;
@@ -237,17 +236,27 @@ void DeviceStatusCollectManager::UnInit()
         collectHandler_->CleanFfrt();
         collectHandler_ = nullptr;
     }
-    for (auto& iter : collectPluginMap_) {
+    std::map<int32_t, sptr<ICollectPlugin>> plugins;
+    {
+        std::unique_lock<samgr::shared_mutex> writeLock(collectPluginMapLock_);
+        plugins.swap(collectPluginMap_);
+    }
+    for (auto& iter : plugins) {
         if (iter.second != nullptr) {
             iter.second->OnStop();
         }
     }
-    collectPluginMap_.clear();
+    plugins.clear();
 }
 
 void DeviceStatusCollectManager::CleanFfrt()
 {
-    for (auto& iter : collectPluginMap_) {
+    std::map<int32_t, sptr<ICollectPlugin>> plugins;
+    {
+        std::shared_lock<samgr::shared_mutex> readLock(collectPluginMapLock_);
+        plugins = collectPluginMap_;
+    }
+    for (auto& iter : plugins) {
         if ((iter.first == DEVICE_ONLINE || iter.first == COMMON_EVENT) && (iter.second != nullptr)) {
             iter.second->CleanFfrt();
         }
@@ -259,7 +268,12 @@ void DeviceStatusCollectManager::CleanFfrt()
 
 void DeviceStatusCollectManager::SetFfrt()
 {
-    for (auto& iter : collectPluginMap_) {
+    std::map<int32_t, sptr<ICollectPlugin>> plugins;
+    {
+        std::shared_lock<samgr::shared_mutex> readLock(collectPluginMapLock_);
+        plugins = collectPluginMap_;
+    }
+    for (auto& iter : plugins) {
         if ((iter.first == DEVICE_ONLINE || iter.first == COMMON_EVENT) && (iter.second != nullptr)) {
             iter.second->SetFfrt();
         }
@@ -276,8 +290,15 @@ void DeviceStatusCollectManager::StartCollect()
         return;
     }
     auto callback = [this] () {
-        for (auto& iter : collectPluginMap_) {
-            iter.second->OnStart();
+        std::map<int32_t, sptr<ICollectPlugin>> plugins;
+        {
+            std::shared_lock<samgr::shared_mutex> readLock(collectPluginMapLock_);
+            plugins = collectPluginMap_;
+        }
+        for (auto& iter : plugins) {
+            if (iter.second != nullptr) {
+                iter.second->OnStart();
+            }
         }
     };
     collectHandler_->PostTask(callback);
@@ -325,28 +346,16 @@ void DeviceStatusCollectManager::PostDelayTask(std::function<void()> callback, i
     collectHandler_->PostTask(callback, delayTime * TO_MILLISECOND);
 }
 
-int32_t DeviceStatusCollectManager::IsExistInPluginMap(int32_t eventId)
-{
-    if (collectPluginMap_.count(eventId) == 0) {
-        HILOGE("eventid:%{public}d collect not exist", eventId);
-        return ERR_INVALID_VALUE;
-    }
-    if (collectPluginMap_[eventId] == nullptr) {
-        HILOGE("eventid:%{public}d collect is null", eventId);
-        return ERR_INVALID_VALUE;
-    }
-    return ERR_OK;
-}
-
 int32_t DeviceStatusCollectManager::GetOnDemandReasonExtraData(int64_t extraDataId, OnDemandReasonExtraData& extraData)
 {
     HILOGD("DeviceStaMgr GetOnDemandReasonExtraData begin, extraDataId:%{public}d",
         static_cast<int32_t>(extraDataId));
-    if (IsExistInPluginMap(COMMON_EVENT) != ERR_OK) {
+    sptr<ICollectPlugin> plugin = GetPlugin(COMMON_EVENT);
+    if (plugin == nullptr) {
         HILOGE("not support get extra data");
         return ERR_INVALID_VALUE;
     }
-    if (!collectPluginMap_[COMMON_EVENT]->GetOnDemandReasonExtraData(extraDataId, extraData)) {
+    if (!plugin->GetOnDemandReasonExtraData(extraDataId, extraData)) {
         HILOGE("get extra data failed");
         return ERR_INVALID_VALUE;
     }
@@ -357,22 +366,24 @@ void DeviceStatusCollectManager::SaveSaExtraDataId(int32_t saId, int64_t extraDa
 {
     HILOGD("DeviceStaMgr SaveSaExtraDataId begin, SA:%{public}d, extraDataId:%{public}d",
         saId, static_cast<int32_t>(extraDataId));
-    if (IsExistInPluginMap(COMMON_EVENT) != ERR_OK) {
+    sptr<ICollectPlugin> plugin = GetPlugin(COMMON_EVENT);
+    if (plugin == nullptr) {
         HILOGE("CommonEventCollect is nullptr");
         return;
     }
-    collectPluginMap_[COMMON_EVENT]->SaveSaExtraDataId(saId, extraDataId);
+    plugin->SaveSaExtraDataId(saId, extraDataId);
     return;
 }
 
 void DeviceStatusCollectManager::ClearSaExtraDataId(int32_t saId)
 {
     HILOGD("DeviceStaMgr ClearSaExtraDataId begin, SA:%{public}d", saId);
-    if (IsExistInPluginMap(COMMON_EVENT) != ERR_OK) {
+    sptr<ICollectPlugin> plugin = GetPlugin(COMMON_EVENT);
+    if (plugin == nullptr) {
         HILOGE("CommonEventCollect is nullptr");
         return;
     }
-    collectPluginMap_[COMMON_EVENT]->ClearSaExtraDataId(saId);
+    plugin->ClearSaExtraDataId(saId);
     return;
 }
 
@@ -380,11 +391,12 @@ void DeviceStatusCollectManager::SaveCacheCommonEventSaExtraId(const OnDemandEve
     const std::list<SaControlInfo>& saControlList)
 {
     HILOGD("DeviceStaMgr SaveCacheCommonEventSaExtraId begin");
-    if (IsExistInPluginMap(COMMON_EVENT) != ERR_OK) {
+    sptr<ICollectPlugin> plugin = GetPlugin(COMMON_EVENT);
+    if (plugin == nullptr) {
         HILOGE("CommonEventCollect is nullptr");
         return;
     }
-    collectPluginMap_[COMMON_EVENT]->SaveCacheCommonEventSaExtraId(event, saControlList);
+    plugin->SaveCacheCommonEventSaExtraId(event, saControlList);
     return;
 }
 
@@ -393,11 +405,12 @@ int32_t DeviceStatusCollectManager::GetSaExtraDataIdList(int32_t saId, std::vect
 {
     HILOGD("DeviceStaMgr GetSaExtraDataIdList begin, SA:%{public}d, event:%{public}s",
         saId, eventName.c_str());
-    if (IsExistInPluginMap(COMMON_EVENT) != ERR_OK) {
+    sptr<ICollectPlugin> plugin = GetPlugin(COMMON_EVENT);
+    if (plugin == nullptr) {
         HILOGE("CommonEventCollect is nullptr");
         return ERR_INVALID_VALUE;
     }
-    return collectPluginMap_[COMMON_EVENT]->GetSaExtraDataIdList(saId, extraDataIdList, eventName);
+    return plugin->GetSaExtraDataIdList(saId, extraDataIdList, eventName);
 }
 
 int32_t DeviceStatusCollectManager::AddCollectEvents(const std::vector<OnDemandEvent>& events)
@@ -407,18 +420,19 @@ int32_t DeviceStatusCollectManager::AddCollectEvents(const std::vector<OnDemandE
     }
     std::map<int32_t, std::vector<OnDemandEvent>> eventMap;
     for (auto& event : events) {
-        if (collectPluginMap_.count(event.eventId) == 0) {
-            HILOGE("not support eventId: %{public}d", event.eventId);
-            return ERR_INVALID_VALUE;
-        }
-        if (collectPluginMap_[event.eventId] == nullptr) {
+        if (GetPlugin(event.eventId) == nullptr) {
             HILOGE("not support eventId: %{public}d", event.eventId);
             return ERR_INVALID_VALUE;
         }
         eventMap[event.eventId].emplace_back(event);
     }
     for (const auto& iter : eventMap) {
-        int32_t ret = collectPluginMap_[iter.first]->AddCollectEvent(iter.second);
+        sptr<ICollectPlugin> plugin = GetPlugin(iter.first);
+        if (plugin == nullptr) {
+            HILOGE("not support eventId: %{public}d", iter.first);
+            return ERR_INVALID_VALUE;
+        }
+        int32_t ret = plugin->AddCollectEvent(iter.second);
         if (ret != ERR_OK) {
             HILOGE("add collect event failed, eventId: %{public}d", iter.first);
             return ret;
@@ -457,18 +471,15 @@ int32_t DeviceStatusCollectManager::RemoveUnusedEventsLocked(const std::vector<O
         return ERR_OK;
     }
     for (auto& event : events) {
-        if (collectPluginMap_.count(event.eventId) == 0) {
-            HILOGE("not support eventId: %{public}d", event.eventId);
-            continue;
-        }
-        if (collectPluginMap_[event.eventId] == nullptr) {
+        sptr<ICollectPlugin> plugin = GetPlugin(event.eventId);
+        if (plugin == nullptr) {
             HILOGE("not support eventId: %{public}d", event.eventId);
             continue;
         }
         bool eventUsed = CheckEventUsedLocked(event);
         if (!eventUsed) {
             HILOGI("CheckEventUsedLocked name:%{public}s,value:%{public}s", event.name.c_str(), event.value.c_str());
-            int32_t ret = collectPluginMap_[event.eventId]->RemoveUnusedEvent(event);
+            int32_t ret = plugin->RemoveUnusedEvent(event);
             if (ret != ERR_OK) {
                 HILOGE("Remove event failed, eventId: %{public}d", event.eventId);
             }
@@ -601,9 +612,23 @@ int32_t DeviceStatusCollectManager::UpdateOnDemandEvents(int32_t systemAbilityId
     return ERR_OK;
 }
 
-const std::vector<int32_t>& DeviceStatusCollectManager::GetLowMemPrepareList()
+std::vector<int32_t> DeviceStatusCollectManager::GetLowMemPrepareList()
 {
-    return collectPluginMap_[PARAM]->GetLowMemPrepareList();
+    sptr<ICollectPlugin> plugin = GetPlugin(PARAM);
+    if (plugin == nullptr) {
+        return {};
+    }
+    return plugin->GetLowMemPrepareList();
+}
+
+sptr<ICollectPlugin> DeviceStatusCollectManager::GetPlugin(int32_t eventId)
+{
+    std::shared_lock<samgr::shared_mutex> readLock(collectPluginMapLock_);
+    auto iter = collectPluginMap_.find(eventId);
+    if (iter == collectPluginMap_.end()) {
+        return nullptr;
+    }
+    return iter->second;
 }
 
 #ifdef PREFERENCES_ENABLE

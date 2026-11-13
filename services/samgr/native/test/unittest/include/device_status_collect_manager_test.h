@@ -16,7 +16,9 @@
 #ifndef SAMGR_TEST_UNITTEST_INCLUDE_DEVICE_STATUS_COLLECT_MANAGER_TEST_H
 #define SAMGR_TEST_UNITTEST_INCLUDE_DEVICE_STATUS_COLLECT_MANAGER_TEST_H
 
+#include <atomic>
 #include <condition_variable>
+#include <functional>
 #include <shared_mutex>
 
 #include "ffrt_handler.h"
@@ -44,6 +46,7 @@ public:
 
     int32_t OnStart() override
     {
+        onStartCount_++;
         return 0;
     }
 
@@ -51,8 +54,39 @@ public:
     {
         return 0;
     }
-    
+
+    void SaveSaExtraDataId(int32_t saId, int64_t extraDataId) override
+    {
+        saveSaExtraDataIdCount_++;
+    }
+
+    void ClearSaExtraDataId(int32_t saId) override
+    {
+        clearSaExtraDataIdCount_++;
+    }
+
+    void SaveCacheCommonEventSaExtraId(const OnDemandEvent& event,
+        const std::list<SaControlInfo>& saControlList) override
+    {
+        saveCacheCommonEventSaExtraIdCount_++;
+    }
+
+    int32_t AddCollectEvent(const std::vector<OnDemandEvent>& events) override
+    {
+        addCollectEventCount_++;
+        if (mockOnAddCollectEvent_ != nullptr) {
+            mockOnAddCollectEvent_();
+        }
+        return ERR_OK;
+    }
+
     bool mockCheckConditionResult_ = false;
+    std::function<void()> mockOnAddCollectEvent_;
+    std::atomic<int32_t> onStartCount_ { 0 };
+    std::atomic<int32_t> saveSaExtraDataIdCount_ { 0 };
+    std::atomic<int32_t> clearSaExtraDataIdCount_ { 0 };
+    std::atomic<int32_t> saveCacheCommonEventSaExtraIdCount_ { 0 };
+    std::atomic<int32_t> addCollectEventCount_ { 0 };
 };
 } // OHOS
 #endif /* SAMGR_TEST_UNITTEST_INCLUDE_DEVICE_STATUS_COLLECT_MANAGER_TEST_H */
