@@ -1156,6 +1156,152 @@ HWTEST_F(DeviceStatusCollectManagerTest, CheckEventUsedLocked002, TestSize.Level
     DTEST_LOG << "CheckEventUsedLocked001 end" << std::endl;
 }
 
+/**
+ * @tc.name: GetPlugin001
+ * @tc.desc: test GetPlugin with plugin exist, not exist and nullptr
+ * @tc.type: FUNC
+ */
+HWTEST_F(DeviceStatusCollectManagerTest, GetPlugin001, TestSize.Level3)
+{
+    DTEST_LOG << "GetPlugin001 begin" << std::endl;
+    collect->collectPluginMap_.clear();
+    sptr<ICollectPlugin> plugin = collect->GetPlugin(MOCK_PLUGIN);
+    EXPECT_EQ(plugin, nullptr);
+
+    collect->collectPluginMap_[MOCK_PLUGIN] = new MockCollectPlugin(collect);
+    plugin = collect->GetPlugin(MOCK_PLUGIN);
+    EXPECT_NE(plugin, nullptr);
+
+    collect->collectPluginMap_[MOCK_PLUGIN] = nullptr;
+    plugin = collect->GetPlugin(MOCK_PLUGIN);
+    EXPECT_EQ(plugin, nullptr);
+    DTEST_LOG << "GetPlugin001 end" << std::endl;
+}
+
+/**
+ * @tc.name: GetLowMemPrepareList002
+ * @tc.desc: test GetLowMemPrepareList with PARAM plugin not exist in collectPluginMap_
+ * @tc.type: FUNC
+ */
+HWTEST_F(DeviceStatusCollectManagerTest, GetLowMemPrepareList002, TestSize.Level3)
+{
+    DTEST_LOG << "GetLowMemPrepareList002 begin" << std::endl;
+    collect->collectPluginMap_.clear();
+    std::vector<int32_t> saIds = collect->GetLowMemPrepareList();
+    EXPECT_TRUE(saIds.empty());
+    DTEST_LOG << "GetLowMemPrepareList002 end" << std::endl;
+}
+
+/**
+ * @tc.name: StartCollect002
+ * @tc.desc: test StartCollect skips nullptr plugin in the map and calls OnStart of valid plugin
+ * @tc.type: FUNC
+ */
+HWTEST_F(DeviceStatusCollectManagerTest, StartCollect002, TestSize.Level3)
+{
+    DTEST_LOG << "StartCollect002 begin" << std::endl;
+    sptr<MockCollectPlugin> mockPlugin1 = new MockCollectPlugin(collect);
+    collect->collectPluginMap_.clear();
+    collect->collectPluginMap_[MOCK_PLUGIN] = mockPlugin1;
+    // nullptr plugin stored in the map should be skipped
+    collect->collectPluginMap_[MOCK_PLUGIN + 1] = nullptr;
+    collect->collectHandler_ = std::make_shared<FFRTHandler>("collect");
+
+    collect->StartCollect();
+    PostTask(collect->collectHandler_);
+    EXPECT_EQ(mockPlugin1->onStartCount_.load(), 1);
+
+    // StartCollect with empty map does not call OnStart again
+    collect->collectPluginMap_.clear();
+    collect->StartCollect();
+    PostTask(collect->collectHandler_);
+    EXPECT_EQ(mockPlugin1->onStartCount_.load(), 1);
+    DTEST_LOG << "StartCollect002 end" << std::endl;
+}
+
+/**
+ * @tc.name: SaveSaExtraDataId002
+ * @tc.desc: test SaveSaExtraDataId with COMMON_EVENT plugin exist in collectPluginMap_
+ * @tc.type: FUNC
+ */
+HWTEST_F(DeviceStatusCollectManagerTest, SaveSaExtraDataId002, TestSize.Level3)
+{
+    DTEST_LOG << "SaveSaExtraDataId002 begin" << std::endl;
+    sptr<MockCollectPlugin> mockPlugin = new MockCollectPlugin(collect);
+    collect->collectPluginMap_.clear();
+    collect->collectPluginMap_[COMMON_EVENT] = mockPlugin;
+
+    collect->SaveSaExtraDataId(SAID, EXTRA_ID);
+    EXPECT_EQ(mockPlugin->saveSaExtraDataIdCount_.load(), 1);
+    DTEST_LOG << "SaveSaExtraDataId002 end" << std::endl;
+}
+
+/**
+ * @tc.name: ClearSaExtraDataId002
+ * @tc.desc: test ClearSaExtraDataId with COMMON_EVENT plugin exist in collectPluginMap_
+ * @tc.type: FUNC
+ */
+HWTEST_F(DeviceStatusCollectManagerTest, ClearSaExtraDataId002, TestSize.Level3)
+{
+    DTEST_LOG << "ClearSaExtraDataId002 begin" << std::endl;
+    sptr<MockCollectPlugin> mockPlugin = new MockCollectPlugin(collect);
+    collect->collectPluginMap_.clear();
+    collect->collectPluginMap_[COMMON_EVENT] = mockPlugin;
+
+    collect->ClearSaExtraDataId(SAID);
+    EXPECT_EQ(mockPlugin->clearSaExtraDataIdCount_.load(), 1);
+    DTEST_LOG << "ClearSaExtraDataId002 end" << std::endl;
+}
+
+/**
+ * @tc.name: SaveCacheCommonEventSaExtraId002
+ * @tc.desc: test SaveCacheCommonEventSaExtraId with COMMON_EVENT plugin exist in collectPluginMap_
+ * @tc.type: FUNC
+ */
+HWTEST_F(DeviceStatusCollectManagerTest, SaveCacheCommonEventSaExtraId002, TestSize.Level3)
+{
+    DTEST_LOG << "SaveCacheCommonEventSaExtraId002 begin" << std::endl;
+    sptr<MockCollectPlugin> mockPlugin = new MockCollectPlugin(collect);
+    collect->collectPluginMap_.clear();
+    collect->collectPluginMap_[COMMON_EVENT] = mockPlugin;
+
+    OnDemandEvent event = { COMMON_EVENT, SA_TAG_DEVICE_ON_LINE, "on" };
+    std::list<SaControlInfo> saControlList;
+    collect->SaveCacheCommonEventSaExtraId(event, saControlList);
+    EXPECT_EQ(mockPlugin->saveCacheCommonEventSaExtraIdCount_.load(), 1);
+    DTEST_LOG << "SaveCacheCommonEventSaExtraId002 end" << std::endl;
+}
+
+/**
+ * @tc.name: AddCollectEvents006
+ * @tc.desc: test AddCollectEvents when plugin is removed after first check loop
+ * @tc.type: FUNC
+ */
+HWTEST_F(DeviceStatusCollectManagerTest, AddCollectEvents006, TestSize.Level3)
+{
+    DTEST_LOG << "AddCollectEvents006 begin" << std::endl;
+    sptr<MockCollectPlugin> mockPlugin1 = new MockCollectPlugin(collect);
+    sptr<MockCollectPlugin> mockPlugin2 = new MockCollectPlugin(collect);
+    collect->collectPluginMap_.clear();
+    collect->collectPluginMap_[MOCK_PLUGIN] = mockPlugin1;
+    collect->collectPluginMap_[MOCK_PLUGIN + 1] = mockPlugin2;
+    // when the first plugin handles events, the second plugin is removed from
+    // collectPluginMap_, so GetPlugin in the second loop returns nullptr
+    mockPlugin1->mockOnAddCollectEvent_ = []() {
+        collect->collectPluginMap_[MOCK_PLUGIN + 1] = nullptr;
+    };
+    std::vector<OnDemandEvent> events;
+    OnDemandEvent event1 = { MOCK_PLUGIN, SA_TAG_DEVICE_ON_LINE, "on" };
+    OnDemandEvent event2 = { MOCK_PLUGIN + 1, SA_TAG_DEVICE_ON_LINE, "on" };
+    events.push_back(event1);
+    events.push_back(event2);
+    int32_t ret = collect->AddCollectEvents(events);
+    EXPECT_EQ(ret, ERR_INVALID_VALUE);
+    EXPECT_EQ(mockPlugin1->addCollectEventCount_.load(), 1);
+    EXPECT_EQ(mockPlugin2->addCollectEventCount_.load(), 0);
+    DTEST_LOG << "AddCollectEvents006 end" << std::endl;
+}
+
 #ifdef PREFERENCES_ENABLE
 HWTEST_F(DeviceStatusCollectManagerTest, GetSaControlListByPersistEventd001, TestSize.Level3)
 {

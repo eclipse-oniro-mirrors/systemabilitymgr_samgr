@@ -54,9 +54,8 @@ public:
         const std::list<SaControlInfo>& saControlList);
     int32_t GetSaExtraDataIdList(int32_t saId, std::vector<int64_t>& extraDataIdList,
         const std::string& eventName = "");
-    int32_t IsExistInPluginMap(int32_t eventId);
     void RemoveWhiteCommonEvent();
-    const std::vector<int32_t>& GetLowMemPrepareList();
+    std::vector<int32_t> GetLowMemPrepareList();
 private:
     std::shared_ptr<PreferencesUtil> CreatePreferencesUtil() const;
     bool NeedPersistOnDemandEvent(const OnDemandEvent& event);
@@ -76,7 +75,9 @@ private:
     bool CheckExtraMessages(const OnDemandEvent& ev1, const OnDemandEvent& ev2);
     int32_t AddCollectEvents(const std::vector<OnDemandEvent>& events);
     int32_t RemoveUnusedEventsLocked(const std::vector<OnDemandEvent>& events);
+    sptr<ICollectPlugin> GetPlugin(int32_t eventId);
     std::map<int32_t, sptr<ICollectPlugin>> collectPluginMap_;
+    samgr::shared_mutex collectPluginMapLock_;
     std::shared_ptr<FFRTHandler> collectHandler_;
     std::weak_ptr<BaseSystemAbilityManager> manager_;
     samgr::shared_mutex saProfilesLock_;
