@@ -197,8 +197,8 @@ private:
 #endif
     }
     void DoLoadRemoteSystemAbility(int32_t systemAbilityId, int32_t callingPid,
-        int32_t callingUid, const std::string& deviceId, const sptr<ISystemAbilityLoadCallback>& callback);
-    sptr<DBinderServiceStub> DoMakeRemoteBinder(int32_t systemAbilityId, int32_t callingPid, int32_t callingUid,
+        int32_t callingAppUid, const std::string& deviceId, const sptr<ISystemAbilityLoadCallback>& callback);
+    sptr<DBinderServiceStub> DoMakeRemoteBinder(int32_t systemAbilityId, int32_t callingPid, int32_t callingAppUid,
         const std::string& deviceId);
     void ReportGetSAPeriodically();
     void OndemandLoad();

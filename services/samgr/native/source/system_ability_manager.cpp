@@ -407,7 +407,7 @@ sptr<IRemoteObject> SystemAbilityManager::CheckSystemAbility(int32_t systemAbili
         HILOGE("CheckSystemAbilityFromRpc SA:%{public}d not distributed!", systemAbilityId);
         return nullptr;
     }
-    return DoMakeRemoteBinder(systemAbilityId, IPCSkeleton::GetCallingPid(), IPCSkeleton::GetCallingUid(), deviceId);
+    return DoMakeRemoteBinder(systemAbilityId, IPCSkeleton::GetCallingPid(), IPCSkeleton::GetCallingAppUid(), deviceId);
 }
 
 int32_t SystemAbilityManager::AddSystemAbility(int32_t systemAbilityId, const sptr<IRemoteObject>& ability,
@@ -728,9 +728,9 @@ int32_t SystemAbilityManager::LoadSystemAbility(int32_t systemAbilityId, const s
         callbacks.emplace_back(callback);
     }
     auto callingPid = IPCSkeleton::GetCallingPid();
-    auto callingUid = IPCSkeleton::GetCallingUid();
-    auto task = [this, systemAbilityId, callingPid, callingUid, deviceId, callback] {
-        this->DoLoadRemoteSystemAbility(systemAbilityId, callingPid, callingUid, deviceId, callback);
+    auto callingAppUid = IPCSkeleton::GetCallingAppUid();
+    auto task = [this, systemAbilityId, callingPid, callingAppUid, deviceId, callback] {
+        this->DoLoadRemoteSystemAbility(systemAbilityId, callingPid, callingAppUid, deviceId, callback);
     };
     std::thread thread(task);
     thread.detach();
@@ -738,10 +738,10 @@ int32_t SystemAbilityManager::LoadSystemAbility(int32_t systemAbilityId, const s
 }
 
 void SystemAbilityManager::DoLoadRemoteSystemAbility(int32_t systemAbilityId, int32_t callingPid,
-    int32_t callingUid, const std::string& deviceId, const sptr<ISystemAbilityLoadCallback>& callback)
+    int32_t callingAppUid, const std::string& deviceId, const sptr<ISystemAbilityLoadCallback>& callback)
 {
     pthread_setname_np(pthread_self(), ONDEMAND_WORKER);
-    sptr<DBinderServiceStub> remoteBinder = DoMakeRemoteBinder(systemAbilityId, callingPid, callingUid, deviceId);
+    sptr<DBinderServiceStub> remoteBinder = DoMakeRemoteBinder(systemAbilityId, callingPid, callingAppUid, deviceId);
 
     if (callback == nullptr) {
         HILOGI("DoLoadRemoteSystemAbility callback is null, SA:%{public}d", systemAbilityId);
@@ -801,7 +801,7 @@ int32_t SystemAbilityManager::DoLoadSystemAbilityFromRpc(const std::string& srcD
 }
 
 sptr<DBinderServiceStub> SystemAbilityManager::DoMakeRemoteBinder(int32_t systemAbilityId, int32_t callingPid,
-    int32_t callingUid, const std::string& deviceId)
+    int32_t callingAppUid, const std::string& deviceId)
 {
     HILOGI("MakeRemoteBinder begin, SA:%{public}d", systemAbilityId);
     std::string networkId = deviceId;
@@ -817,7 +817,7 @@ sptr<DBinderServiceStub> SystemAbilityManager::DoMakeRemoteBinder(int32_t system
         {
             SamgrXCollie samgrXCollie("samgr--MakeRemoteBinder_" + strName);
             remoteBinder = dBinderService_->MakeRemoteBinder(Str8ToStr16(strName),
-                networkId, systemAbilityId, callingPid, callingUid);
+                networkId, systemAbilityId, callingPid, callingAppUid);
         }
     }
     HILOGI("MakeRemoteBinder end, result %{public}s, SA:%{public}d, networkId : %{public}s",
