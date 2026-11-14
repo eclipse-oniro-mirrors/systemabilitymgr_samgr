@@ -2702,4 +2702,267 @@ HWTEST_F(BaseSystemAbilityMgrTest, NormalOnDemandLoadKeepStart001, TestSize.Leve
     EXPECT_EQ(g_mockServiceControl.waitCallCount, 1);
 }
 
+/**
+ * @tc.name: EnterHighPriorityLoad001
+ * @tc.desc: test EnterHighPriorityLoad inserts entry into map
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, EnterHighPriorityLoad001, TestSize.Level3)
+{
+    auto manager = std::make_shared<BaseSystemAbilityManager>();
+    EXPECT_TRUE(manager->highPriorityLoadMap_.empty());
+    manager->EnterHighPriorityLoad(SAID, PROCESS_NAME);
+    EXPECT_EQ(manager->highPriorityLoadMap_.size(), 1U);
+    EXPECT_EQ(manager->highPriorityLoadMap_[SAID], PROCESS_NAME);
+    manager->highPriorityLoadMap_.clear();
+}
+
+/**
+ * @tc.name: ExitHighPriorityLoad001
+ * @tc.desc: test ExitHighPriorityLoad with no entry returns early (no-op)
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, ExitHighPriorityLoad001, TestSize.Level3)
+{
+    auto manager = std::make_shared<BaseSystemAbilityManager>();
+    EXPECT_TRUE(manager->highPriorityLoadMap_.empty());
+    manager->ExitHighPriorityLoad(SAID, "no-entry");
+    EXPECT_TRUE(manager->highPriorityLoadMap_.empty());
+}
+
+/**
+ * @tc.name: ExitHighPriorityLoad002
+ * @tc.desc: test ExitHighPriorityLoad with existing entry removes it
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, ExitHighPriorityLoad002, TestSize.Level3)
+{
+    auto manager = std::make_shared<BaseSystemAbilityManager>();
+    manager->highPriorityLoadMap_[SAID] = PROCESS_NAME;
+    EXPECT_EQ(manager->highPriorityLoadMap_.size(), 1U);
+    manager->ExitHighPriorityLoad(SAID, "test");
+    EXPECT_EQ(manager->highPriorityLoadMap_.count(SAID), 0U);
+}
+
+/**
+ * @tc.name: ExitHighPriorityLoad003
+ * @tc.desc: test ExitHighPriorityLoad called twice, second is no-op
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, ExitHighPriorityLoad003, TestSize.Level3)
+{
+    auto manager = std::make_shared<BaseSystemAbilityManager>();
+    manager->highPriorityLoadMap_[SAID] = PROCESS_NAME;
+    manager->ExitHighPriorityLoad(SAID, "first");
+    EXPECT_EQ(manager->highPriorityLoadMap_.count(SAID), 0U);
+    manager->ExitHighPriorityLoad(SAID, "second");
+    EXPECT_EQ(manager->highPriorityLoadMap_.count(SAID), 0U);
+}
+
+/**
+ * @tc.name: OnHighPriorityProcessRegistered001
+ * @tc.desc: test OnHighPriorityProcessRegistered with no matching session does not alter map
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, OnHighPriorityProcessRegistered001, TestSize.Level3)
+{
+    auto manager = std::make_shared<BaseSystemAbilityManager>();
+    manager->highPriorityLoadMap_.clear();
+    manager->OnHighPriorityProcessRegistered(u"proc_a");
+    EXPECT_TRUE(manager->highPriorityLoadMap_.empty());
+}
+
+/**
+ * @tc.name: OnHighPriorityProcessRegistered002
+ * @tc.desc: test OnHighPriorityProcessRegistered with matching session keeps entry (restore-only)
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, OnHighPriorityProcessRegistered002, TestSize.Level3)
+{
+    auto manager = std::make_shared<BaseSystemAbilityManager>();
+    manager->highPriorityLoadMap_[SAID] = PROCESS_NAME;
+    manager->OnHighPriorityProcessRegistered(PROCESS_NAME);
+    EXPECT_EQ(manager->highPriorityLoadMap_.size(), 1U);
+    EXPECT_EQ(manager->highPriorityLoadMap_[SAID], PROCESS_NAME);
+    manager->highPriorityLoadMap_.clear();
+}
+
+/**
+ * @tc.name: OnHighPriorityProcessRegistered003
+ * @tc.desc: test OnHighPriorityProcessRegistered with non-matching procName keeps entry
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, OnHighPriorityProcessRegistered003, TestSize.Level3)
+{
+    auto manager = std::make_shared<BaseSystemAbilityManager>();
+    manager->highPriorityLoadMap_[SAID] = PROCESS_NAME;
+    manager->OnHighPriorityProcessRegistered(u"different_process");
+    EXPECT_EQ(manager->highPriorityLoadMap_.size(), 1U);
+    EXPECT_EQ(manager->highPriorityLoadMap_[SAID], PROCESS_NAME);
+    manager->highPriorityLoadMap_.clear();
+}
+
+/**
+ * @tc.name: OnHighPriorityAbilityRegistered001
+ * @tc.desc: test OnHighPriorityAbilityRegistered with no entry returns early
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, OnHighPriorityAbilityRegistered001, TestSize.Level3)
+{
+    auto manager = std::make_shared<BaseSystemAbilityManager>();
+    manager->highPriorityLoadMap_.clear();
+    manager->OnHighPriorityAbilityRegistered(SAID, 100);
+    EXPECT_TRUE(manager->highPriorityLoadMap_.empty());
+}
+
+/**
+ * @tc.name: OnHighPriorityAbilityRegistered002
+ * @tc.desc: test OnHighPriorityAbilityRegistered with existing entry removes it
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, OnHighPriorityAbilityRegistered002, TestSize.Level3)
+{
+    auto manager = std::make_shared<BaseSystemAbilityManager>();
+    manager->highPriorityLoadMap_[SAID] = PROCESS_NAME;
+    manager->OnHighPriorityAbilityRegistered(SAID, 100);
+    EXPECT_EQ(manager->highPriorityLoadMap_.count(SAID), 0U);
+}
+
+/**
+ * @tc.name: CleanHighPriorityLoadOnProcessDied001
+ * @tc.desc: test CleanHighPriorityLoadOnProcessDied removes all matching entries
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, CleanHighPriorityLoadOnProcessDied001, TestSize.Level3)
+{
+    auto manager = std::make_shared<BaseSystemAbilityManager>();
+    manager->highPriorityLoadMap_[SAID] = PROCESS_NAME;
+    manager->highPriorityLoadMap_[OTHER_SAID] = PROCESS_NAME;
+    manager->CleanHighPriorityLoadOnProcessDied(PROCESS_NAME);
+    EXPECT_TRUE(manager->highPriorityLoadMap_.empty());
+}
+
+/**
+ * @tc.name: CleanHighPriorityLoadOnProcessDied002
+ * @tc.desc: test CleanHighPriorityLoadOnProcessDied with non-matching procName keeps entries
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, CleanHighPriorityLoadOnProcessDied002, TestSize.Level3)
+{
+    auto manager = std::make_shared<BaseSystemAbilityManager>();
+    manager->highPriorityLoadMap_[SAID] = PROCESS_NAME;
+    manager->CleanHighPriorityLoadOnProcessDied(u"different_process");
+    EXPECT_EQ(manager->highPriorityLoadMap_.size(), 1U);
+    manager->highPriorityLoadMap_.clear();
+}
+
+/**
+ * @tc.name: CleanHighPriorityLoadOnProcessDied003
+ * @tc.desc: test CleanHighPriorityLoadOnProcessDied with empty map is no-op
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, CleanHighPriorityLoadOnProcessDied003, TestSize.Level3)
+{
+    auto manager = std::make_shared<BaseSystemAbilityManager>();
+    manager->highPriorityLoadMap_.clear();
+    manager->CleanHighPriorityLoadOnProcessDied(PROCESS_NAME);
+    EXPECT_TRUE(manager->highPriorityLoadMap_.empty());
+}
+
+/**
+ * @tc.name: CleanHighPriorityLoadOnProcessDied004
+ * @tc.desc: test CleanHighPriorityLoadOnProcessDied removes only matching entries, keeps others
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, CleanHighPriorityLoadOnProcessDied004, TestSize.Level3)
+{
+    auto manager = std::make_shared<BaseSystemAbilityManager>();
+    manager->highPriorityLoadMap_[SAID] = PROCESS_NAME;
+    manager->highPriorityLoadMap_[OTHER_SAID] = u"other_process";
+    manager->CleanHighPriorityLoadOnProcessDied(PROCESS_NAME);
+    EXPECT_EQ(manager->highPriorityLoadMap_.size(), 1U);
+    EXPECT_EQ(manager->highPriorityLoadMap_[OTHER_SAID], u"other_process");
+    manager->highPriorityLoadMap_.clear();
+}
+
+/**
+ * @tc.name: ReportSaLoadStartDfx001
+ * @tc.desc: test ReportSaLoadStartDfx with non-null abilityStateScheduler_ runs without crash
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, ReportSaLoadStartDfx001, TestSize.Level3)
+{
+    auto manager = std::make_shared<BaseSystemAbilityManager>();
+    auto scheduler = std::make_shared<SystemAbilityStateScheduler>(
+        std::weak_ptr<BaseSystemAbilityManager>{});
+    manager->abilityStateScheduler_ = scheduler;
+    OnDemandEvent event = {INTERFACE_CALL, "test", "on"};
+    manager->ReportSaLoadStartDfx(SAID, PROCESS_NAME, event);
+    EXPECT_NE(manager->abilityStateScheduler_, nullptr);
+}
+
+/**
+ * @tc.name: ReportSaLoadStartDfx002
+ * @tc.desc: test ReportSaLoadStartDfx with null abilityStateScheduler_ runs without crash
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, ReportSaLoadStartDfx002, TestSize.Level3)
+{
+    auto manager = std::make_shared<BaseSystemAbilityManager>();
+    manager->abilityStateScheduler_ = nullptr;
+    OnDemandEvent event = {INTERFACE_CALL, "test", "on"};
+    manager->ReportSaLoadStartDfx(SAID, PROCESS_NAME, event);
+    EXPECT_EQ(manager->abilityStateScheduler_, nullptr);
+}
+
+/**
+ * @tc.name: IsHighPriorityLoadCaller001
+ * @tc.desc: test IsHighPriorityLoadCaller with invalid pid (<=0) returns false
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, IsHighPriorityLoadCaller001, TestSize.Level3)
+{
+    auto manager = std::make_shared<BaseSystemAbilityManager>();
+    EXPECT_FALSE(manager->IsHighPriorityLoadCaller(0));
+    EXPECT_FALSE(manager->IsHighPriorityLoadCaller(-1));
+}
+
+/**
+ * @tc.name: IsHighPriorityLoadCaller002
+ * @tc.desc: test IsHighPriorityLoadCaller with self pid returns false (not top-app cgroup)
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, IsHighPriorityLoadCaller002, TestSize.Level3)
+{
+    auto manager = std::make_shared<BaseSystemAbilityManager>();
+    int32_t pid = getpid();
+    EXPECT_FALSE(manager->IsHighPriorityLoadCaller(pid));
+}
+
+/**
+ * @tc.name: StartDynamicSystemProcessFeatureOff001
+ * @tc.desc: test StartDynamicSystemProcess uses normal START when settopprior.support is off,
+ *           even if highPriorityLoadMap_ has entries (feature-off guard)
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, StartDynamicSystemProcessFeatureOff001, TestSize.Level3)
+{
+    ResetMockServiceControl();
+    SetMockServiceControlReturn(0);
+    SetMockServiceControlWaitReturn(0);
+    auto manager = std::make_shared<BaseSystemAbilityManager>();
+    auto scheduler = std::make_shared<SystemAbilityStateScheduler>(
+        std::weak_ptr<BaseSystemAbilityManager>{});
+    auto procContext = std::make_shared<SystemProcessContext>();
+    procContext->pid = 100;
+    scheduler->processContextMap_[PROCESS_NAME] = procContext;
+    manager->abilityStateScheduler_ = scheduler;
+    manager->highPriorityLoadMap_[SAID] = PROCESS_NAME;
+    OnDemandEvent event = {INTERFACE_CALL, "load"};
+    int32_t result = manager->StartDynamicSystemProcess(PROCESS_NAME, SAID, event);
+    EXPECT_EQ(result, 0);
+    EXPECT_EQ(g_mockServiceControl.callCount, 1);
+    manager->highPriorityLoadMap_.clear();
+}
+
 } // namespace OHOS

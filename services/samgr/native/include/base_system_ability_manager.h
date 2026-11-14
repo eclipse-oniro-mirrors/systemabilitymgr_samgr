@@ -232,6 +232,20 @@ protected:
     virtual int32_t StartDynamicSystemProcess(const std::u16string& name, int32_t systemAbilityId,
         const OnDemandEvent& event);
     bool IsInitBootFinished();
+    // High-priority load sessions, one entry per fresh spawn triggered by a top-app load request.
+    // Enter runs only when the SA process is neither started nor starting, raising init QoS right
+    // before the spawn command; the On*Registered hooks issue the matching restore synchronously on
+    // the happy path. Failure paths only drop the bookkeeping entry -- the kernel-side QoS refcount
+    // and its timeout recovery absorb missed restores, so samgr posts no compensation of its own.
+    bool IsHighPriorityLoadCaller(int32_t callingPid);
+    void EnterHighPriorityLoad(int32_t systemAbilityId, const std::u16string& procName);
+    void ExitHighPriorityLoad(int32_t systemAbilityId, const std::string& reason);
+    void OnHighPriorityProcessRegistered(const std::u16string& procName);
+    void OnHighPriorityAbilityRegistered(int32_t systemAbilityId, int32_t saProcessPid);
+    void CleanHighPriorityLoadOnProcessDied(const std::u16string& procName);
+
+    void ReportSaLoadStartDfx(int32_t systemAbilityId, const std::u16string& procName,
+        const OnDemandEvent& event);
     void WaitForProcessStopped(const std::u16string& name, int32_t systemAbilityId);
 
     void RefreshListenerState(int32_t systemAbilityId);
@@ -304,6 +318,9 @@ protected:
 
     samgr::mutex saFrequencyLock_;
     std::map<uint64_t, int32_t> saFrequencyMap_; // {pid_said, count}
+
+    samgr::mutex highPriorityLoadLock_;
+    std::map<int32_t, std::u16string> highPriorityLoadMap_; // {saId, procName}
 #ifdef SUPPORT_MULTI_INSTANCE
     samgr::mutex multiInstanceSaIdsLock_;
     std::set<int32_t> multiInstanceSaIds_;

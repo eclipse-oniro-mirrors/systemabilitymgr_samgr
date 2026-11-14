@@ -793,4 +793,92 @@ HWTEST_F(SamgrUtilTest, AbilityStatusDeathOnRemoteDiedAsync001, TestSize.Level3)
     system::g_mockBoolValue = false;
 }
 
+/**
+ * @tc.name: CheckSupportSetTopPrior001
+ * @tc.desc: test GetBoolParameter returns false when param is false.
+ * @tc.type: FUNC
+ */
+HWTEST_F(SamgrUtilTest, CheckSupportSetTopPrior001, TestSize.Level3)
+{
+    system::g_mockBoolValue = false;
+    bool ret = system::GetBoolParameter("const.samgr.settopprior.support", false);
+    EXPECT_FALSE(ret);
+}
+
+/**
+ * @tc.name: CheckSupportSetTopPrior002
+ * @tc.desc: test GetBoolParameter returns true when param is true.
+ * @tc.type: FUNC
+ */
+HWTEST_F(SamgrUtilTest, CheckSupportSetTopPrior002, TestSize.Level3)
+{
+    system::g_mockBoolValue = true;
+    bool ret = system::GetBoolParameter("const.samgr.settopprior.support", false);
+    EXPECT_TRUE(ret);
+    system::g_mockBoolValue = false;
+}
+
+/**
+ * @tc.name: IsTopAppCgroupLine001
+ * @tc.desc: test IsTopAppCgroupLine
+ * @tc.type: FUNC
+ */
+HWTEST_F(SamgrUtilTest, IsTopAppCgroupLine001, TestSize.Level3)
+{
+    std::string line = "10:cpuset:/top-app";
+    EXPECT_TRUE(SamgrUtil::IsTopAppCgroupLine(line));
+    line = "10:cpuset:/top-app/sub";
+    EXPECT_TRUE(SamgrUtil::IsTopAppCgroupLine(line));
+    line = "10:cpu:/system";
+    EXPECT_FALSE(SamgrUtil::IsTopAppCgroupLine(line));
+    line = "10:cpuset:/system";
+    EXPECT_FALSE(SamgrUtil::IsTopAppCgroupLine(line));
+    line = "";
+    EXPECT_FALSE(SamgrUtil::IsTopAppCgroupLine(line));
+    line = "10:cpuset:/top-application";
+    EXPECT_FALSE(SamgrUtil::IsTopAppCgroupLine(line));
+}
+
+/**
+ * @tc.name: IsProcessTopApp001
+ * @tc.desc: test IsProcessTopApp
+ * @tc.type: FUNC
+ */
+HWTEST_F(SamgrUtilTest, IsProcessTopApp001, TestSize.Level3)
+{
+    EXPECT_FALSE(SamgrUtil::IsProcessTopApp(0));
+    EXPECT_FALSE(SamgrUtil::IsProcessTopApp(-1));
+    EXPECT_FALSE(SamgrUtil::IsProcessTopApp(999999));
+    int32_t pid = getpid();
+    EXPECT_FALSE(SamgrUtil::IsProcessTopApp(pid));
+}
+
+/**
+ * @tc.name: RaiseSaPrior001
+ * @tc.desc: test RaiseSaPrior
+ * @tc.type: FUNC
+ */
+HWTEST_F(SamgrUtilTest, RaiseSaPrior001, TestSize.Level3)
+{
+    EXPECT_EQ(SamgrUtil::RaiseSaPrior(0), -1);
+    EXPECT_EQ(SamgrUtil::RaiseSaPrior(-1), -1);
+    int32_t pid = getpid();
+    int32_t ret = SamgrUtil::RaiseSaPrior(pid);
+    EXPECT_NE(ret, 0);
+}
+
+/**
+ * @tc.name: RestoreSaPrior001
+ * @tc.desc: test RestoreSaPrior
+ * @tc.type: FUNC
+ */
+HWTEST_F(SamgrUtilTest, RestoreSaPrior001, TestSize.Level3)
+{
+    EXPECT_EQ(SamgrUtil::RestoreSaPrior(0), -1);
+    EXPECT_EQ(SamgrUtil::RestoreSaPrior(-1), -1);
+    int32_t pid = getpid();
+    int32_t ret = SamgrUtil::RestoreSaPrior(pid);
+    EXPECT_NE(ret, 0);
+}
+
 }

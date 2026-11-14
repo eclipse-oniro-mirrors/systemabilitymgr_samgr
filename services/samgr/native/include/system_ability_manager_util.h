@@ -63,6 +63,7 @@ public:
     static bool CheckSystemProcessStarted(const std::u16string& procName, int32_t userId);
     static bool CheckSupportSetPrior();
     static bool CheckSupportSetDeathPrior();
+    static bool CheckSupportSetTopPrior();
 #ifdef SUPPORT_PENGLAI_MODE
     static bool CheckPengLaiPermission(int32_t systemAbilityId);
 #endif
@@ -76,6 +77,15 @@ public:
     static std::string GetProcessNameFromCmdline(int32_t pid);
     static int ParsePeerBinderPid(std::ifstream& fin, int32_t pid, int32_t tid);
     static bool KillProcessByPid(int32_t pid, int32_t tid);
+    // Returns true only when pid belongs to a process in the top-app cpuset. Any read/parse failure
+    // means false, so an undecidable caller never gets priority elevation.
+    static bool IsProcessTopApp(int32_t pid);
+    // Pure parsing helper for IsProcessTopApp, exposed for unit tests. Line format: "id:subsys:/path".
+    static bool IsTopAppCgroupLine(const std::string& line);
+    // Raises/restore the QoS of pid through /dev/sched_state_report. The kernel QoS module owns
+    // refcounting per pid and timeout recovery; samgr only needs to keep ENTER/COMPLETE calls paired.
+    static int32_t RaiseSaPrior(int32_t pid);
+    static int32_t RestoreSaPrior(int32_t pid);
 private:
 #ifdef SUPPORT_PENGLAI_MODE
     static void* InitPenglaiFunc();
