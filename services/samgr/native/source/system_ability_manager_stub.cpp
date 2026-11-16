@@ -1051,7 +1051,7 @@ int32_t SystemAbilityManagerStub::OnStartSystemAbilityFailInner(MessageParcel& d
 
 int32_t SystemAbilityManagerStub::GetSystemProcessInfoInner(MessageParcel& data, MessageParcel& reply)
 {
-    HILOGI("GetSystemProcessInfoInner called");
+    HILOGD("GetSystemProcessInfoInner called");
     if (!CanRequest()) {
         HILOGE("GetSystemProcessInfoInner PERMISSION DENIED!");
         return ERR_PERMISSION_DENIED;
