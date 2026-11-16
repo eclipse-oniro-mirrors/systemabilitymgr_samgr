@@ -811,7 +811,7 @@ bool SystemAbilityStateScheduler::CheckSaIsImmediatelyRecycle(
             return true;
         }
     }
-    HILOGI("CheckSaIsImmediatelyRecycle is false");
+    HILOGD("CheckSaIsImmediatelyRecycle is false");
     return false;
 }
 

@@ -1419,7 +1419,7 @@ void BaseSystemAbilityManager::NotifySystemAbilityLoaded(int32_t systemAbilityId
     }
     startingAbilityMap_.erase(iter);
     if (!startingAbilityMap_.empty()) {
-        HILOGI("startingAbility size:%{public}zu", startingAbilityMap_.size());
+        HILOGD("startingAbility size:%{public}zu", startingAbilityMap_.size());
     }
 }
 
@@ -1905,7 +1905,7 @@ int32_t BaseSystemAbilityManager::OnStartSystemAbilityFail(int32_t systemAbility
     }
     startingAbilityMap_.erase(iter);
     if (!startingAbilityMap_.empty()) {
-        HILOGI("startingAbility size:%{public}zu", startingAbilityMap_.size());
+        HILOGD("startingAbility size:%{public}zu", startingAbilityMap_.size());
     }
     return ERR_OK;
 }

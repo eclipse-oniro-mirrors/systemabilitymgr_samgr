@@ -575,7 +575,7 @@ void CommonEventCollect::StartReclaimIpcThreadWork(const EventFwk::CommonEventDa
         return;
     }
 #endif
-    HILOGI("StartReclaimIpcThreadWork begins");
+    HILOGD("StartReclaimIpcThreadWork begins");
     bool isTrigger = false;
     std::string eventName = data.GetWant().GetAction();
     std::string eventType = data.GetData();
