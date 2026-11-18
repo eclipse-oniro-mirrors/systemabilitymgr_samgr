@@ -391,18 +391,18 @@ void* SamgrUtil::InitPenglaiFunc()
 
 bool SamgrUtil::CheckPengLaiPermission(int32_t systemAbilityId)
 {
-    auto callingUid = IPCSkeleton::GetCallingUid();
+    auto callingAppUid = IPCSkeleton::GetCallingAppUid();
 
     if (penglaiFunc_ == nullptr) {
         return true;
     }
     PenglaiFunc IsLaunchAllowedByUid = (PenglaiFunc)penglaiFunc_;
-    bool isAllow = IsLaunchAllowedByUid(callingUid, systemAbilityId);
+    bool isAllow = IsLaunchAllowedByUid(callingAppUid, systemAbilityId);
     if (!isAllow) {
-        HILOGE("IsLaunchAllowedByUid failed. callingUid:%{public}d, SA:%{public}d", callingUid, systemAbilityId);
+        HILOGE("IsLaunchAllowedByUid failed. callingAppUid:%{public}d, SA:%{public}d", callingAppUid, systemAbilityId);
         return false;
     }
-    HILOGD("CheckPengLaiPerm suc. cUid:%{public}d,SA:%{public}d", callingUid, systemAbilityId);
+    HILOGD("CheckPengLaiPerm suc. cUid:%{public}d,SA:%{public}d", callingAppUid, systemAbilityId);
     return isAllow;
 }
 #endif
