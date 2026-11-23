@@ -70,6 +70,9 @@ void RefCountCollect::IdentifyUnrefOndemand()
         if (object == nullptr) {
             continue;
         }
+        if (!object->IsProxyObject()) {
+            continue;
+        }
         sptr<IPCObjectProxy> saProxy = reinterpret_cast<IPCObjectProxy*>(object.GetRefPtr());
         if (saProxy == nullptr) {
             continue;
