@@ -301,4 +301,216 @@ HWTEST_F(SystemAbilityMgrTest, UserLifecycleCompletionGuard001, TestSize.Level3)
     EXPECT_FALSE(lifecycleManager.IsUserStopping(testUserId));
 }
 
+/**
+ * @tc.name: UserLifecycleConcurrentStateTransition001
+ * @tc.desc: Verify rapid state transitions for the same user converge correctly.
+ * @tc.type: FUNC
+ */
+HWTEST_F(SystemAbilityMgrTest, UserLifecycleConcurrentStateTransition001, TestSize.Level3)
+{
+    UserLifecycleManager lifecycleManager;
+    std::list<SaProfile> profiles;
+    lifecycleManager.SetSaProfiles(&profiles);
+    constexpr int32_t testUserId = 200;
+    EXPECT_EQ(lifecycleManager.OnUserStateChanged(testUserId, USER_STATE_ACTIVATING), ERR_OK);
+    EXPECT_EQ(lifecycleManager.OnUserStateChanged(testUserId, USER_STATE_SWITCHING), ERR_OK);
+    EXPECT_EQ(lifecycleManager.GetForegroundUserId(), testUserId);
+    EXPECT_EQ(lifecycleManager.OnUserStateChanged(testUserId, USER_STATE_ACTIVATING), ERR_OK);
+    EXPECT_EQ(lifecycleManager.OnUserStateChanged(testUserId, USER_STATE_SWITCHING), ERR_OK);
+    EXPECT_EQ(lifecycleManager.GetForegroundUserId(), testUserId);
+    EXPECT_EQ(lifecycleManager.GetActiveUserCount(), 1U);
+    EXPECT_EQ(lifecycleManager.OnUserStateChanged(testUserId, USER_STATE_STOPPING), ERR_OK);
+}
+
+/**
+ * @tc.name: UserLifecycleForegroundSwitch001
+ * @tc.desc: Verify foreground user switches when another user becomes foreground.
+ * @tc.type: FUNC
+ */
+HWTEST_F(SystemAbilityMgrTest, UserLifecycleForegroundSwitch001, TestSize.Level3)
+{
+    UserLifecycleManager lifecycleManager;
+    std::list<SaProfile> profiles;
+    lifecycleManager.SetSaProfiles(&profiles);
+    constexpr int32_t firstUserId = 201;
+    constexpr int32_t secondUserId = 202;
+    EXPECT_EQ(lifecycleManager.OnUserStateChanged(firstUserId, USER_STATE_ACTIVATING), ERR_OK);
+    EXPECT_EQ(lifecycleManager.OnUserStateChanged(firstUserId, USER_STATE_SWITCHING), ERR_OK);
+    EXPECT_EQ(lifecycleManager.GetForegroundUserId(), firstUserId);
+    EXPECT_EQ(lifecycleManager.OnUserStateChanged(secondUserId, USER_STATE_ACTIVATING), ERR_OK);
+    EXPECT_EQ(lifecycleManager.OnUserStateChanged(secondUserId, USER_STATE_SWITCHING), ERR_OK);
+    EXPECT_EQ(lifecycleManager.GetForegroundUserId(), secondUserId);
+    EXPECT_EQ(lifecycleManager.GetActiveUserCount(), 2U);
+    EXPECT_EQ(lifecycleManager.OnUserStateChanged(secondUserId, USER_STATE_STOPPING), ERR_OK);
+    EXPECT_EQ(lifecycleManager.OnUserStateChanged(firstUserId, USER_STATE_STOPPING), ERR_OK);
+}
+
+/**
+ * @tc.name: UserLifecycleMultiSaIdSubscriptionDedup001
+ * @tc.desc: Verify per-SAId deduplication when subscribing multiple SAIds with same listener.
+ * @tc.type: FUNC
+ */
+HWTEST_F(SystemAbilityMgrTest, UserLifecycleMultiSaIdSubscriptionDedup001, TestSize.Level3)
+{
+    UserLifecycleManager lifecycleManager;
+    constexpr int32_t testPid = 2000;
+    sptr<ISystemAbilityStatusChange> listener = new SaStatusChangeMock();
+    ASSERT_NE(listener, nullptr);
+    EXPECT_EQ(lifecycleManager.SubscribeSystemAbilityForAllUsers(5001, listener, testPid), ERR_OK);
+    EXPECT_EQ(lifecycleManager.SubscribeSystemAbilityForAllUsers(5002, listener, testPid), ERR_OK);
+    EXPECT_EQ(lifecycleManager.SubscribeSystemAbilityForAllUsers(5003, listener, testPid), ERR_OK);
+    EXPECT_EQ(lifecycleManager.globalSubscriptions_.systemAbilitySubscriptions.size(), 3U);
+    EXPECT_EQ(lifecycleManager.SubscribeSystemAbilityForAllUsers(5001, listener, testPid), ERR_OK);
+    EXPECT_EQ(lifecycleManager.globalSubscriptions_.systemAbilitySubscriptions.size(), 3U);
+    EXPECT_EQ(lifecycleManager.UnSubscribeSystemAbilityForAllUsers(5002, listener), ERR_OK);
+    EXPECT_EQ(lifecycleManager.globalSubscriptions_.systemAbilitySubscriptions.size(), 2U);
+}
+
+/**
+ * @tc.name: UserLifecycleUnsubscribeNonSubscribedSaId001
+ * @tc.desc: Verify unsubscribing a non-subscribed SAId is a safe no-op.
+ * @tc.type: FUNC
+ */
+HWTEST_F(SystemAbilityMgrTest, UserLifecycleUnsubscribeNonSubscribedSaId001, TestSize.Level3)
+{
+    UserLifecycleManager lifecycleManager;
+    sptr<ISystemAbilityStatusChange> listener = new SaStatusChangeMock();
+    ASSERT_NE(listener, nullptr);
+    EXPECT_EQ(lifecycleManager.SubscribeSystemAbilityForAllUsers(6001, listener, 3000), ERR_OK);
+    EXPECT_EQ(lifecycleManager.globalSubscriptions_.systemAbilitySubscriptions.size(), 1U);
+    EXPECT_EQ(lifecycleManager.UnSubscribeSystemAbilityForAllUsers(9999, listener), ERR_OK);
+    EXPECT_EQ(lifecycleManager.globalSubscriptions_.systemAbilitySubscriptions.size(), 1U);
+}
+
+/**
+ * @tc.name: UserLifecycleMultiProcessListeners001
+ * @tc.desc: Verify multiple process listeners can subscribe and unsubscribe independently.
+ * @tc.type: FUNC
+ */
+HWTEST_F(SystemAbilityMgrTest, UserLifecycleMultiProcessListeners001, TestSize.Level3)
+{
+    UserLifecycleManager lifecycleManager;
+    sptr<ISystemProcessStatusChange> listener1 = new SystemProcessStatusChange();
+    sptr<ISystemProcessStatusChange> listener2 = new SystemProcessStatusChange();
+    ASSERT_NE(listener1, nullptr);
+    ASSERT_NE(listener2, nullptr);
+    bool added1 = false;
+    bool added2 = false;
+    EXPECT_EQ(lifecycleManager.SubscribeSystemProcessForAllUsers(listener1, added1), ERR_OK);
+    EXPECT_TRUE(added1);
+    EXPECT_EQ(lifecycleManager.SubscribeSystemProcessForAllUsers(listener2, added2), ERR_OK);
+    EXPECT_TRUE(added2);
+    EXPECT_EQ(lifecycleManager.globalSubscriptions_.systemProcessSubscriptions.size(), 2U);
+    EXPECT_EQ(lifecycleManager.UnSubscribeSystemProcessForAllUsers(listener1), ERR_OK);
+    EXPECT_EQ(lifecycleManager.globalSubscriptions_.systemProcessSubscriptions.size(), 1U);
+    EXPECT_EQ(lifecycleManager.UnSubscribeSystemProcessForAllUsers(listener2), ERR_OK);
+    EXPECT_TRUE(lifecycleManager.globalSubscriptions_.systemProcessSubscriptions.empty());
+}
+
+/**
+ * @tc.name: UserLifecycleStopAlreadyStopped001
+ * @tc.desc: Verify stopping a user that has already been stopped returns error.
+ * @tc.type: FUNC
+ */
+HWTEST_F(SystemAbilityMgrTest, UserLifecycleStopAlreadyStopped001, TestSize.Level3)
+{
+    UserLifecycleManager lifecycleManager;
+    std::list<SaProfile> profiles;
+    lifecycleManager.SetSaProfiles(&profiles);
+    constexpr int32_t testUserId = 203;
+    EXPECT_EQ(lifecycleManager.OnUserStateChanged(testUserId, USER_STATE_ACTIVATING), ERR_OK);
+    EXPECT_NE(lifecycleManager.GetMultiUserManager(testUserId), nullptr);
+    EXPECT_EQ(lifecycleManager.OnUserStateChanged(testUserId, USER_STATE_STOPPING), ERR_OK);
+    EXPECT_FALSE(lifecycleManager.IsValidUser(testUserId));
+    EXPECT_EQ(lifecycleManager.OnUserStateChanged(testUserId, USER_STATE_STOPPING), ERR_INVALID_VALUE);
+    EXPECT_FALSE(lifecycleManager.IsUserStopping(testUserId));
+}
+
+/**
+ * @tc.name: UserLifecycleActivateAlreadyActive001
+ * @tc.desc: Verify activating an already-active user is a safe no-op.
+ * @tc.type: FUNC
+ */
+HWTEST_F(SystemAbilityMgrTest, UserLifecycleActivateAlreadyActive001, TestSize.Level3)
+{
+    UserLifecycleManager lifecycleManager;
+    std::list<SaProfile> profiles;
+    lifecycleManager.SetSaProfiles(&profiles);
+    constexpr int32_t testUserId = 204;
+    EXPECT_EQ(lifecycleManager.OnUserStateChanged(testUserId, USER_STATE_ACTIVATING), ERR_OK);
+    EXPECT_NE(lifecycleManager.GetMultiUserManager(testUserId), nullptr);
+    EXPECT_EQ(lifecycleManager.OnUserStateChanged(testUserId, USER_STATE_ACTIVATING), ERR_OK);
+    EXPECT_EQ(lifecycleManager.GetActiveUserCount(), 1U);
+    EXPECT_EQ(lifecycleManager.OnUserStateChanged(testUserId, USER_STATE_STOPPING), ERR_OK);
+}
+
+/**
+ * @tc.name: UserLifecycleSwitchSameUser001
+ * @tc.desc: Verify switching to the already-foreground user is a no-op.
+ * @tc.type: FUNC
+ */
+HWTEST_F(SystemAbilityMgrTest, UserLifecycleSwitchSameUser001, TestSize.Level3)
+{
+    UserLifecycleManager lifecycleManager;
+    std::list<SaProfile> profiles;
+    lifecycleManager.SetSaProfiles(&profiles);
+    constexpr int32_t testUserId = 205;
+    EXPECT_EQ(lifecycleManager.OnUserStateChanged(testUserId, USER_STATE_ACTIVATING), ERR_OK);
+    EXPECT_EQ(lifecycleManager.OnUserStateChanged(testUserId, USER_STATE_SWITCHING), ERR_OK);
+    EXPECT_EQ(lifecycleManager.GetForegroundUserId(), testUserId);
+    EXPECT_EQ(lifecycleManager.OnUserStateChanged(testUserId, USER_STATE_SWITCHING), ERR_OK);
+    EXPECT_EQ(lifecycleManager.GetForegroundUserId(), testUserId);
+    EXPECT_EQ(lifecycleManager.OnUserStateChanged(testUserId, USER_STATE_STOPPING), ERR_OK);
+}
+
+/**
+ * @tc.name: UserLifecycleValidUserIdsAfterMultiActivate001
+ * @tc.desc: Verify GetValidUserIds returns correct set after multiple activations and a stop.
+ * @tc.type: FUNC
+ */
+HWTEST_F(SystemAbilityMgrTest, UserLifecycleValidUserIdsAfterMultiActivate001, TestSize.Level3)
+{
+    UserLifecycleManager lifecycleManager;
+    std::list<SaProfile> profiles;
+    lifecycleManager.SetSaProfiles(&profiles);
+    constexpr int32_t userId1 = 206;
+    constexpr int32_t userId2 = 207;
+    constexpr int32_t userId3 = 208;
+    EXPECT_TRUE(lifecycleManager.GetValidUserIds().empty());
+    EXPECT_EQ(lifecycleManager.OnUserStateChanged(userId1, USER_STATE_ACTIVATING), ERR_OK);
+    EXPECT_EQ(lifecycleManager.OnUserStateChanged(userId2, USER_STATE_ACTIVATING), ERR_OK);
+    EXPECT_EQ(lifecycleManager.OnUserStateChanged(userId3, USER_STATE_ACTIVATING), ERR_OK);
+    auto validIds = lifecycleManager.GetValidUserIds();
+    EXPECT_EQ(validIds.size(), 3U);
+    EXPECT_TRUE(validIds.count(userId1) > 0);
+    EXPECT_TRUE(validIds.count(userId2) > 0);
+    EXPECT_TRUE(validIds.count(userId3) > 0);
+    EXPECT_EQ(lifecycleManager.OnUserStateChanged(userId2, USER_STATE_STOPPING), ERR_OK);
+    validIds = lifecycleManager.GetValidUserIds();
+    EXPECT_EQ(validIds.size(), 2U);
+    EXPECT_TRUE(validIds.count(userId2) == 0);
+}
+
+/**
+ * @tc.name: UserLifecycleStopWhileStopping001
+ * @tc.desc: Verify stopping a user that is already in stopping state is skipped.
+ * @tc.type: FUNC
+ */
+HWTEST_F(SystemAbilityMgrTest, UserLifecycleStopWhileStopping001, TestSize.Level3)
+{
+    UserLifecycleManager lifecycleManager;
+    constexpr int32_t testUserId = 209;
+    auto manager = std::make_shared<MultiSystemAbilityManager>(testUserId);
+    ASSERT_NE(manager, nullptr);
+    auto context = std::make_shared<UserLifecycleManager::UserStopping>();
+    ASSERT_NE(context, nullptr);
+    context->manager = manager;
+    lifecycleManager.userStoppingContexts_[testUserId] = context;
+    lifecycleManager.userStateMap_[testUserId] = USER_STATE_STOPPING;
+    lifecycleManager.validUserIds_.insert(testUserId);
+    EXPECT_EQ(lifecycleManager.OnUserStateChanged(testUserId, USER_STATE_STOPPING), ERR_OK);
+    EXPECT_TRUE(lifecycleManager.IsUserStopping(testUserId));
+    lifecycleManager.CancelPendingStopTasks();
+}
+
 } // namespace OHOS
