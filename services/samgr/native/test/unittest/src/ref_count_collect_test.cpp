@@ -13,6 +13,9 @@
  * limitations under the License.
  */
 
+#include "ipc_object_proxy.h"
+#include "ipc_object_stub.h"
+
 #define private public
 #include "ref_count_collect_test.h"
 
@@ -172,5 +175,81 @@ HWTEST_F(RefCountCollectTest, IdentifyUnrefOndemandNullManager001, TestSize.Leve
     collect->IdentifyUnrefOndemand();
     EXPECT_EQ(collect->unrefUnloadSaList_.size(), 1u);
     DTEST_LOG << "IdentifyUnrefOndemandNullManager001 END" << std::endl;
+}
+
+namespace {
+class TestRefCountManager : public BaseSystemAbilityManager {
+public:
+    explicit TestRefCountManager(const sptr<IRemoteObject>& remoteObject)
+        : remoteObject_(remoteObject) {}
+    ~TestRefCountManager() override = default;
+    sptr<IRemoteObject> CheckSystemAbility(int32_t systemAbilityId) override
+    {
+        checkCallCount_++;
+        return remoteObject_;
+    }
+    void ProcessOnDemandEvent(const OnDemandEvent& event,
+        const std::list<SaControlInfo>& saControlList) override
+    {
+        processEventCount_++;
+    }
+    int32_t GetCheckCallCount() const
+    {
+        return checkCallCount_;
+    }
+    int32_t GetProcessEventCount() const
+    {
+        return processEventCount_;
+    }
+private:
+    sptr<IRemoteObject> remoteObject_;
+    int32_t checkCallCount_ = 0;
+    int32_t processEventCount_ = 0;
+};
+}
+
+/**
+ * @tc.name: IdentifyUnrefOndemandLocalObject001
+ * @tc.desc: test IdentifyUnrefOndemand, CheckSystemAbility returns local stub object,
+ *           IsProxyObject is false, skip the non-proxy object
+ * @tc.type: FUNC
+ */
+HWTEST_F(RefCountCollectTest, IdentifyUnrefOndemandLocalObject001, TestSize.Level1)
+{
+    DTEST_LOG << "IdentifyUnrefOndemandLocalObject001 BEGIN" << std::endl;
+    sptr<IPCObjectStub> localObject = sptr<IPCObjectStub>::MakeSptr(u"test_local_stub");
+    ASSERT_NE(localObject, nullptr);
+    EXPECT_FALSE(localObject->IsProxyObject());
+
+    auto mockManager = std::make_shared<TestRefCountManager>(localObject);
+    sptr<RefCountCollect> collect = new RefCountCollect(nullptr, mockManager);
+    ASSERT_NE(collect, nullptr);
+    collect->unrefUnloadSaList_.push_back(1);
+    collect->IdentifyUnrefOndemand();
+    EXPECT_EQ(mockManager->GetCheckCallCount(), 1);
+    EXPECT_EQ(mockManager->GetProcessEventCount(), 0);
+    DTEST_LOG << "IdentifyUnrefOndemandLocalObject001 END" << std::endl;
+}
+
+/**
+ * @tc.name: IdentifyUnrefOndemandProxyObject001
+ * @tc.desc: test IdentifyUnrefOndemand, CheckSystemAbility returns proxy object,
+ *           IsProxyObject is true, continue to get strong ref count
+ * @tc.type: FUNC
+ */
+HWTEST_F(RefCountCollectTest, IdentifyUnrefOndemandProxyObject001, TestSize.Level1)
+{
+    DTEST_LOG << "IdentifyUnrefOndemandProxyObject001 BEGIN" << std::endl;
+    sptr<IPCObjectProxy> proxyObject = new IPCObjectProxy(1, u"test_proxy_object");
+    ASSERT_NE(proxyObject, nullptr);
+    EXPECT_TRUE(proxyObject->IsProxyObject());
+
+    auto mockManager = std::make_shared<TestRefCountManager>(proxyObject);
+    sptr<RefCountCollect> collect = new RefCountCollect(nullptr, mockManager);
+    ASSERT_NE(collect, nullptr);
+    collect->unrefUnloadSaList_.push_back(1);
+    collect->IdentifyUnrefOndemand();
+    EXPECT_EQ(mockManager->GetCheckCallCount(), 1);
+    DTEST_LOG << "IdentifyUnrefOndemandProxyObject001 END" << std::endl;
 }
 } // namespace OHOS
