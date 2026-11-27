@@ -1410,6 +1410,151 @@ ohos_rust_unittest("rust_samgr_test_client") {
   part_name = "samgr"
 }
 
+ohos_unittest("ToolsTest") {
+  module_out_path = module_output_path
+  sources = [
+    "${samgr_services_dir}/test/unittest/src/tools_test.cpp",
+    "//foundation/systemabilitymgr/samgr/utils/native/source/tools.cpp",
+  ]
+  configs = [
+    ":sam_test_config",
+    "${samgr_dir}/services/samgr/native:sam_config",
+    "${samgr_dir}/test/resource:coverage_flags",
+  ]
+  external_deps = [
+    "c_utils:utils",
+    "googletest:gtest_main",
+    "hilog:libhilog",
+    "ffrt:libffrt",
+  ]
+}
+
+ohos_unittest("ICollectPluginTest") {
+  module_out_path = module_output_path
+  sources = [
+    "${samgr_dir}/utils/native/source/tools.cpp",
+    "${samgr_services_dir}/source/ability_death_recipient.cpp",
+    "${samgr_services_dir}/source/collect/device_param_collect.cpp",
+    "${samgr_services_dir}/source/collect/device_status_collect_manager.cpp",
+    "${samgr_services_dir}/source/collect/device_timed_collect.cpp",
+    "${samgr_services_dir}/source/collect/icollect_plugin.cpp",
+    "${samgr_services_dir}/source/collect/ref_count_collect.cpp",
+    "${samgr_services_dir}/source/ffrt_handler.cpp",
+    "${samgr_services_dir}/source/rpc_callback_imp.cpp",
+    "${samgr_services_dir}/source/samgr_time_handler.cpp",
+    "${samgr_services_dir}/source/schedule/system_ability_event_handler.cpp",
+    "${samgr_services_dir}/source/schedule/system_ability_state_machine.cpp",
+    "${samgr_services_dir}/source/schedule/system_ability_state_scheduler.cpp",
+    "${samgr_services_dir}/source/system_ability_load_callback_proxy.cpp",
+    "${samgr_services_dir}/source/base_system_ability_manager.cpp",
+    "${samgr_services_dir}/source/system_ability_manager.cpp",
+    "${samgr_services_dir}/source/system_ability_manager_dumper.cpp",
+    "${samgr_services_dir}/source/system_ability_manager_stub.cpp",
+    "${samgr_services_dir}/source/system_ability_manager_util.cpp",
+    "${samgr_services_dir}/source/system_ability_status_change_proxy.cpp",
+    "${samgr_services_dir}/source/system_process_status_change_proxy.cpp",
+    "${samgr_services_dir}/test/unittest/src/device_param_collect_test.cpp",
+    "${samgr_services_dir}/test/unittest/src/device_timed_collect_test.cpp",
+    "${samgr_services_dir}/test/unittest/src/itest_transaction_service.cpp",
+    "${samgr_services_dir}/test/unittest/src/mock_accesstoken_kit.cpp",
+    "${samgr_services_dir}/test/unittest/src/mock_permission.cpp",
+    "${samgr_services_dir}/test/unittest/src/ref_count_collect_test.cpp",
+    "${samgr_services_dir}/test/unittest/src/sa_status_change_mock.cpp",
+    "${samgr_services_dir}/test/unittest/src/system_ability_on_demand_event_test.cpp",
+    "//foundation/systemabilitymgr/samgr/frameworks/native/source/system_process_status_change_stub.cpp",
+    "//foundation/systemabilitymgr/samgr/services/dfx/source/hisysevent_adapter.cpp",
+    "//foundation/systemabilitymgr/samgr/frameworks/native/source/system_ability_status_change_stub.cpp",
+    "//foundation/systemabilitymgr/samgr/frameworks/native/source/system_ability_on_demand_event.cpp",
+    "//foundation/systemabilitymgr/samgr/frameworks/native/source/system_ability_load_callback_stub.cpp",
+  ]
+  configs = [
+    ":sam_test_config",
+    "${samgr_dir}/services/samgr/native:sam_config",
+    "${samgr_dir}/test/resource:coverage_flags",
+  ]
+  deps = [ 
+    "${samgr_dir}/interfaces/innerkits/common:samgr_common",
+    "${samgr_dir}/interfaces/innerkits/dynamic_cache:dynamic_cache",
+    "//foundation/systemabilitymgr/samgr/interfaces/innerkits/samgr_proxy:samgr_proxy",
+  ]
+  external_deps = [
+    "c_utils:utils",
+    "googletest:gtest_main",
+    "hilog:libhilog",
+    "ipc:ipc_core",
+    "safwk:system_ability_ondemand_reason",
+    "ffrt:libffrt",
+    "json:nlohmann_json_static",
+    "ipc:libdbinder",
+    "init:libbeget_proxy",
+    "init:libbegetutil",
+    "access_token:libaccesstoken_sdk",
+    "hitrace:hitrace_meter",
+    "config_policy:configpolicy_util",
+    "qos_manager:qos",
+    "qos_manager:concurrent_task_client",
+    "hisysevent:libhisysevent",
+  ]
+}
+
+ohos_unittest("DynamicCacheTest") {
+  module_out_path = module_output_path
+  cflags = [
+    "-Dprivate=public",
+  ]
+  sources = [
+    "${samgr_services_dir}/test/unittest/src/dynamic_cache_test.cpp",
+    "//foundation/systemabilitymgr/samgr/interfaces/innerkits/dynamic_cache/src/dynamic_cache.cpp",
+  ]
+  configs = [
+    ":sam_test_config",
+    "${samgr_dir}/services/samgr/native:sam_config",
+    "${samgr_dir}/test/resource:coverage_flags",
+  ]
+  deps = [ "//foundation/systemabilitymgr/samgr/interfaces/innerkits/dynamic_cache:dynamic_cache" ]
+  external_deps = [
+    "c_utils:utils",
+    "googletest:gtest_main",
+    "hilog:libhilog",
+    "init:libbegetutil",
+    "ipc:ipc_single",
+    "ffrt:libffrt",
+  ]
+}
+
+ohos_unittest("DeviceTimedCollectToolTest") {
+  module_out_path = module_output_path
+  cflags = [
+    "-Dprivate=public",
+  ]
+  configs = [
+    ":sam_test_config",
+    "${samgr_dir}/services/samgr/native:sam_config",
+    "${samgr_dir}/test/resource:coverage_flags",
+  ]
+  external_deps = [
+    "c_utils:utils",
+    "googletest:gtest_main",
+    "hilog:libhilog",
+    "ipc:ipc_core",
+    "ffrt:libffrt",
+    "safwk:system_ability_ondemand_reason",
+    "json:nlohmann_json_static",
+    "ipc:libdbinder",
+    "init:libbegetutil",
+  ]
+  defines = []
+  sources = []
+  if (preferences_enable) {
+    external_deps += [ "preferences:native_preferences" ]
+    sources += [
+      "${samgr_services_dir}/source/collect/device_timed_collect_tool.cpp",
+      "${samgr_services_dir}/test/unittest/src/device_timed_collect_tool_test.cpp",
+    ]
+    defines += [ "PREFERENCES_ENABLE" ]
+  }
+}
+
 group("unittest") {
   testonly = true
   deps = [
@@ -1427,6 +1572,10 @@ group("unittest") {
     ":TestTool",
     ":manual_ondemand",
     ":ondemand",
+    ":ToolsTest",
+    ":ICollectPluginTest",
+    ":DynamicCacheTest",
+    ":DeviceTimedCollectToolTest",
 
     #":rust_samgr_test_client",
   ]

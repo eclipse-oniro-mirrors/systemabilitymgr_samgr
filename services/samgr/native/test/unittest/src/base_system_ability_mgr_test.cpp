@@ -2965,4 +2965,147 @@ HWTEST_F(BaseSystemAbilityMgrTest, StartDynamicSystemProcessFeatureOff001, TestS
     manager->highPriorityLoadMap_.clear();
 }
 
+/**
+ * @tc.name: AddSystemAbilityInvalidSaId001
+ * @tc.desc: AddSystemAbility with invalid SAId (0, negative, > 0x00ffffff) returns ERR_INVALID_VALUE.
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, AddSystemAbilityInvalidSaId001, TestSize.Level3)
+{
+    auto manager = std::make_shared<BaseSystemAbilityManager>();
+    ASSERT_NE(manager, nullptr);
+    sptr<IRemoteObject> ability = new TestTransactionService();
+    ASSERT_NE(ability, nullptr);
+    ISystemAbilityManager::SAExtraProp extraProp(false, ISystemAbilityManager::DUMP_FLAG_PRIORITY_DEFAULT, u"", u"");
+    EXPECT_EQ(manager->AddSystemAbility(0, ability, extraProp), ERR_INVALID_VALUE);
+    EXPECT_EQ(manager->AddSystemAbility(-1, ability, extraProp), ERR_INVALID_VALUE);
+    EXPECT_EQ(manager->AddSystemAbility(0x01000000, ability, extraProp), ERR_INVALID_VALUE);
+}
+
+/**
+ * @tc.name: AddSystemAbilityNullAbility001
+ * @tc.desc: AddSystemAbility with null ability returns ERR_INVALID_VALUE.
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, AddSystemAbilityNullAbility001, TestSize.Level3)
+{
+    auto manager = std::make_shared<BaseSystemAbilityManager>();
+    ASSERT_NE(manager, nullptr);
+    ISystemAbilityManager::SAExtraProp extraProp(false, ISystemAbilityManager::DUMP_FLAG_PRIORITY_DEFAULT, u"", u"");
+    EXPECT_EQ(manager->AddSystemAbility(SAID, nullptr, extraProp), ERR_INVALID_VALUE);
+}
+
+/**
+ * @tc.name: RemoveSystemAbilityNonExistent001
+ * @tc.desc: RemoveSystemAbility for non-existent and invalid SAId returns ERR_INVALID_VALUE.
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, RemoveSystemAbilityNonExistent001, TestSize.Level3)
+{
+    auto manager = std::make_shared<BaseSystemAbilityManager>();
+    ASSERT_NE(manager, nullptr);
+    EXPECT_EQ(manager->RemoveSystemAbility(SAID), ERR_INVALID_VALUE);
+    EXPECT_EQ(manager->RemoveSystemAbility(0), ERR_INVALID_VALUE);
+    EXPECT_EQ(manager->RemoveSystemAbility(-1), ERR_INVALID_VALUE);
+    EXPECT_EQ(manager->RemoveSystemAbility(0x01000000), ERR_INVALID_VALUE);
+}
+
+/**
+ * @tc.name: GetSystemAbilityNonExistent001
+ * @tc.desc: GetSystemAbility for non-existent and invalid SAId returns nullptr.
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, GetSystemAbilityNonExistent001, TestSize.Level3)
+{
+    auto manager = std::make_shared<BaseSystemAbilityManager>();
+    ASSERT_NE(manager, nullptr);
+    EXPECT_EQ(manager->GetSystemAbility(SAID), nullptr);
+    EXPECT_EQ(manager->GetSystemAbility(OTHER_SAID), nullptr);
+}
+
+/**
+ * @tc.name: UnSubscribeSystemAbilityNonSubscribed001
+ * @tc.desc: UnSubscribeSystemAbility for a non-subscribed SAId is a safe no-op.
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, UnSubscribeSystemAbilityNonSubscribed001, TestSize.Level3)
+{
+    auto manager = std::make_shared<BaseSystemAbilityManager>();
+    ASSERT_NE(manager, nullptr);
+    sptr<ISystemAbilityStatusChange> listener = new SaStatusChangeMock();
+    ASSERT_NE(listener, nullptr);
+    EXPECT_EQ(manager->UnSubscribeSystemAbility(SAID, listener), ERR_OK);
+    EXPECT_EQ(manager->UnSubscribeSystemAbility(0, listener), ERR_OK);
+    EXPECT_EQ(manager->UnSubscribeSystemAbility(-1, listener), ERR_INVALID_VALUE);
+}
+
+/**
+ * @tc.name: UnloadSystemAbilityInvalidSaId001
+ * @tc.desc: UnloadSystemAbility with invalid SAId returns PROFILE_NOT_EXIST.
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, UnloadSystemAbilityInvalidSaId001, TestSize.Level3)
+{
+    auto manager = std::make_shared<BaseSystemAbilityManager>();
+    ASSERT_NE(manager, nullptr);
+    EXPECT_EQ(manager->UnloadSystemAbility(0), PROFILE_NOT_EXIST);
+    EXPECT_EQ(manager->UnloadSystemAbility(-1), PROFILE_NOT_EXIST);
+    EXPECT_EQ(manager->UnloadSystemAbility(0x01000000), PROFILE_NOT_EXIST);
+}
+
+/**
+ * @tc.name: GetSystemProcessInfoSchedulerNull001
+ * @tc.desc: GetSystemProcessInfo with null scheduler returns ERR_INVALID_VALUE.
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, GetSystemProcessInfoSchedulerNull001, TestSize.Level3)
+{
+    auto manager = std::make_shared<BaseSystemAbilityManager>();
+    ASSERT_NE(manager, nullptr);
+    manager->abilityStateScheduler_ = nullptr;
+    SystemProcessInfo info;
+    EXPECT_EQ(manager->GetSystemProcessInfo(SAID, info), ERR_INVALID_VALUE);
+}
+
+/**
+ * @tc.name: GetSystemProcessNonExistent001
+ * @tc.desc: GetSystemProcess with empty and non-existent process name returns nullptr.
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, GetSystemProcessNonExistent001, TestSize.Level3)
+{
+    auto manager = std::make_shared<BaseSystemAbilityManager>();
+    ASSERT_NE(manager, nullptr);
+    EXPECT_EQ(manager->GetSystemProcess(u""), nullptr);
+    EXPECT_EQ(manager->GetSystemProcess(u"non_existent_process"), nullptr);
+}
+
+/**
+ * @tc.name: GetRunningSystemProcessSchedulerNull001
+ * @tc.desc: GetRunningSystemProcess with null scheduler returns ERR_INVALID_VALUE.
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, GetRunningSystemProcessSchedulerNull001, TestSize.Level3)
+{
+    auto manager = std::make_shared<BaseSystemAbilityManager>();
+    ASSERT_NE(manager, nullptr);
+    manager->abilityStateScheduler_ = nullptr;
+    std::list<SystemProcessInfo> processInfos;
+    EXPECT_EQ(manager->GetRunningSystemProcess(processInfos), ERR_INVALID_VALUE);
+    EXPECT_TRUE(processInfos.empty());
+}
+
+/**
+ * @tc.name: SubscribeSystemProcessSchedulerNull001
+ * @tc.desc: SubscribeSystemProcess with null scheduler returns ERR_INVALID_VALUE.
+ * @tc.type: FUNC
+ */
+HWTEST_F(BaseSystemAbilityMgrTest, SubscribeSystemProcessSchedulerNull001, TestSize.Level3)
+{
+    auto manager = std::make_shared<BaseSystemAbilityManager>();
+    ASSERT_NE(manager, nullptr);
+    manager->abilityStateScheduler_ = nullptr;
+    EXPECT_EQ(manager->SubscribeSystemProcess(nullptr), ERR_INVALID_VALUE);
+}
+
 } // namespace OHOS
